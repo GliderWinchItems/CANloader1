@@ -205,7 +205,7 @@ int main(void)
 
 /* Setup TX linked list for CAN  */
    // CAN1 (CAN_HandleTypeDef *phcan, uint8_t canidx, uint16_t numtx, uint16_t numrx);
-  pctl0 = can_iface_init(&hcan1, 0, 16, 128);       
+  pctl0 = can_iface_init(&hcan1, 0, 16, 300);       
   if (pctl0 == NULL) morse_trap(118); // Panic LED flashing
   if (pctl0->ret < 0) morse_trap(119);  
   
