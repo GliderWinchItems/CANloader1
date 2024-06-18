@@ -24,8 +24,8 @@ void canwinch_ldrproto_init(uint32_t iamunitnumber);
 /* @brief	: Initialization for loader
  * @param	: Unit number 
  * ************************************************************************************** */
-void canwinch_ldrproto_poll(void);
-/* @param	: pctl = pointer control block for CAN module being used
+void canwinch_ldrproto_poll(unsigned int i_am_canid);
+/* @param	: i_am_canid = CAN ID for this unit
  * @brief	: If msg is for this unit, then do something with it.
  * ************************************************************************************** */
 

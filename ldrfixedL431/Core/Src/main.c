@@ -205,7 +205,7 @@ int main(void)
 
 /* Setup TX linked list for CAN  */
    // CAN1 (CAN_HandleTypeDef *phcan, uint8_t canidx, uint16_t numtx, uint16_t numrx);
-  pctl0 = can_iface_init(&hcan1, 0, 16, 300);       
+  pctl0 = can_iface_init(&hcan1, 0, 16, 512);       
   if (pctl0 == NULL) morse_trap(118); // Panic LED flashing
   if (pctl0->ret < 0) morse_trap(119);  
   
@@ -213,6 +213,15 @@ int main(void)
   HAL_StatusTypeDef Cret;
   Cret = canfilter_setup_first(0, &hcan1, 15); // CAN1
   if (Cret == HAL_ERROR) morse_trap(122);
+
+/* @brief : Add a 32b id, advance bank number & odd/even
+ * @param : cannum = CAN module number 1, 2, or 3
+ * @param : phcan = Pointer to HAL CAN handle (control block)
+ * @param : id    = 32b CAN id
+ * @param : fifo  = fifo: 0 or 1
+ * @return  : HAL_ERROR or HAL_OK  */
+  Cret = canfilter_setup_add32b_id(1, &hcan1, i_am_canid, 0);
+  if (Cret == HAL_ERROR) morse_trap(123);
 
       /* Select interrupts for CAN1 */
   HAL_CAN_ActivateNotification(&hcan1, \
@@ -439,7 +448,7 @@ int main(void)
     }
 
     /* Do loader'ing, if there are applicable msgs. */
-    canwinch_ldrproto_poll();
+    canwinch_ldrproto_poll(i_am_canid); // Filter CAN id
 
     /* Have we written to flash?  If so, don't jump to the the app unless commanded. */
     if (ldr_phase == 0)

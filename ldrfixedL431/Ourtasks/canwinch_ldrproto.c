@@ -1011,13 +1011,13 @@ printf("\n\r");
 	return;
 }
 /* **************************************************************************************
- * void canwinch_ldrproto_poll(void);
- * @param	: pctl = pointer control block for CAN module being used
+ * void canwinch_ldrproto_poll(unsigned int i_am_canid);
+ * @param	: i_am_canid = CAN ID for this unit
  * @brief	: If msg is for this unit, then do something with it.
  * ************************************************************************************** */
 static uint8_t sw_oto = 0;
 static struct CANTAKEPTR* ptake;
-void canwinch_ldrproto_poll(void)
+void canwinch_ldrproto_poll(unsigned int i_am_canid)
 {
 	struct CANRCVBUF can;
 	if (sw_oto == 0)
@@ -1040,8 +1040,10 @@ void canwinch_ldrproto_poll(void)
 //		if (can.id == CANID_UNI_BMS_PC_I)
 //printf("\n\r# Rcv: 0x%08X %d",(UI)can.id,(UI)can.dlc);
 //for (int m = 0; m<can.dlc; m++)printf(" %02X",(UI)can.cd.uc[m]);
-
-		do_cmd_cmd(&can);		// Execute command
+		if (can.id == i_am_canid)
+		{
+			do_cmd_cmd(&can);		// Execute command
+		}
 	}
 
 #if 0 // Old code jic
