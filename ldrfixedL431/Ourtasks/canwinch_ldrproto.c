@@ -463,7 +463,7 @@ sequence.
 		{ // Here, one or more bytes have changed in flash block; erase needed
 			flblkbuff.diff += 1; // Count total number bytes that were different
 			flblkbuff.sw = 1; // Flag that an erase/write will be needed
-#if 0			
+#if 1//0			
 printf(" D %08X %02X %02X diff %d\n\r",(UI)flblkbuff.p,(UI)*flblkbuff.p,(UI)p->cd.uc[i],(UI)flblkbuff.diff);
 printf("(p-padd) %d dbgct %d dlc %d\n\r",(UI)(flblkbuff.p-padd),(UI)dbgct,(UI)p->dlc);
 #endif
