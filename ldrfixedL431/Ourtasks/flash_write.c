@@ -98,7 +98,7 @@ dtwfl1 = DTWTIME;
 
 	for (i = 0; i < count; i++)
 	{
-	
+__DSB();			
 		while ((FLASH->SR & 0x1) != 0);	// Wait for busy to go away
 		
 		/* Clear any existing error flags. */
@@ -117,6 +117,7 @@ dtwfl1 = DTWTIME;
 		*pfl++ = *prm++; 
 
 		/* Wait for busy to go away */
+__DSB();		
 		while ((FLASH->SR & (1 << 16)) != 0);	
 
 		flash_err |= FLASH->SR;			
@@ -125,7 +126,7 @@ dtwfl2 = DTWTIME;
 
 	/* Clear PG (flash program bit) */
 	FLASH->CR &= ~0x1; 
-
+__DSB();		
 	if ( (flash_err & (FLASH_SR_WRPERR | FLASH_SR_PGAERR)) != 0) return -5;	
 	return 0;
 }
@@ -199,7 +200,7 @@ int flash_erase(uint64_t *pflash)
 
 	/* Don't erase the CANloader! */
 	if ((uint32_t*)pflash < &__appbegin)  return -3;
-
+__DSB();		
 	while ((FLASH->SR & 0x1) != 0);	// Wait for busy to go away
 
 	if (flash_unlock() != 0) return -4;
@@ -211,14 +212,15 @@ int flash_erase(uint64_t *pflash)
 	FLASH->CR  &= ~((0x7FF) << 3); // Clear old page number
 	uint16_t tmp = ((uint32_t)pflash >> 11); // New page number
 	FLASH->CR  |=  (tmp << 3) | 0x2; // New page | Enable page erase
-
+__DSB();		
 	/* Start erase. */
 	FLASH->CR |= (1<<16); // Start bit
-
+__DSB();
 	/* Wait for busy to go away. */
 	while ((FLASH->SR & 0x1) != 0);
 
 	FLASH->CR &= ~FLASH_CR_PER; // Remove PER bit
+__DSB();			
 	flash_err |= FLASH->SR;
 
 	if ( (flash_err & (FLASH_SR_WRPERR | FLASH_SR_PGAERR)) != 0) return -5;

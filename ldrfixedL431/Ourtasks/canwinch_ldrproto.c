@@ -357,7 +357,7 @@ static int do_flash_cycle(void)
 			{
 				printf("F ERASE ER: padd: 0x%08X ret: %d ct: %d\n\r",(unsigned int)padd,(int)ret,(int)ct);
 			}
-		} while ((ret != 0) && (ct++ <= 3));
+		} while ((ret != 0) && (ct++ <= 10));
 
 		uint32_t* pf = (uint32_t*)padd;
 		for (int i = 0; i < 2048/4; i++)
