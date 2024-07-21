@@ -6,6 +6,7 @@
 *******************************************************************************/
 /*
 08/25/2022 Revise for L431 in GliderWinchItems/CANloader
+07/21/2024 Add morse_trap error reporting in heartbeat status msg
 */
 
 #ifndef __CANWINCH_LDRPROTO
