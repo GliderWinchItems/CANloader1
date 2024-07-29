@@ -56,6 +56,7 @@ extern struct CAN_CTLBLOCK* pctl0; // Pointer to CAN1 control block
 extern unsigned int ck;
 extern uint64_t binchksum;
 
+//#define DO_PRINTF // Uncomment to run printf statements
 #define UI unsigned int // Cast for eliminating printf warnings
 
 static unsigned int debugPctr;
@@ -369,16 +370,18 @@ static int do_flash_cycle(void)
 			}
 		}
 		
+#ifdef DO_PRINTF		
 		if (ret == 0)
 		{
 			printf("F ERASE OK: padd: 0x%08X ret: %d ct: %d\n\r",(unsigned int)padd,(int)ret,(int)ct);
 		}
-
+#endif
 		if(ct >= 3) return ret;
 
 		/* Flash double word by double word. */			
 		ret = flash_write((uint64_t*)padd, &flblkbuff.fb.u64[0] ,flashblocksize/8);
 
+#ifdef DO_PRINTF
 		if (ret != 0)
 		{
 			printf("F WRT ERR: padd: 0x%08X ret: %d ct: %d\n\r",(unsigned int)padd, (int)ret, (int)ct);
@@ -387,6 +390,7 @@ static int do_flash_cycle(void)
 		{
 			printf("F WRT OK: padd: 0x%08X ret: %d ct: %d\n\r",(unsigned int)padd, (int)ret, (int)ct);
 		}
+#endif
 
 		uint32_t* psram      = &flblkbuff.fb.u32[0];
 		uint32_t* pflash     = (uint32_t*)padd;
@@ -401,10 +405,12 @@ static int do_flash_cycle(void)
 			psram  += 1;
 			pflash += 1;
 		}
+#ifdef DO_PRINTF		
 		if (fg == 0)
 		{
 			printf("F VER OK %d\n\r",ret);
 		}
+#endif		
 
 	dodoct +=1 ;
 	} while ((fg != 0) && (dodoct < 1));
@@ -431,7 +437,9 @@ static void flashblockinit(void)
 	pt2 = &flblkbuff.fb.u64[0];		// RAM buffer for block
 	ptend = pt2 + (flashblocksize/sizeof(uint64_t)); // End+1 of sram buffer
 //printf("padd: %08X\n\r",(UI)padd);
+#ifdef DO_PRINTF	
 printf("BEP %08X %08X %08X\n\r",(UI)flblkbuff.base,(UI)flblkbuff.end,(UI)flblkbuff.p );	
+#endif
 //printf("P0: %X %X %X\n\r",(UI)pt1,(UI)pt2,(UI)ptend);
 	while (pt2 < ptend) *pt2++ = *pt1++; // Copy flash to RAM buffer
 //printf("P1: %X %X %X\n\r",pt1, pt2, ptend);
@@ -476,11 +484,14 @@ dbgct += 1;
 		flblkbuff.p += 1;
 		if (flblkbuff.p >= flblkbuff.end)
 		{ // Here, end of sram image. Erase and write block when EOB (or theoretically EOF) received
+			
+#ifdef DO_PRINTF	
 extern uint32_t dtwfl1;
-extern uint32_t dtwfl2;			
+extern uint32_t dtwfl2;		
 printf("dtw %d",(UI)(dtwfl2-dtwfl1));			
 			printf("\n\rEND BLK p %08X end %08X padd %08X sw %d diff %d\n\r",(UI)flblkbuff.p,(UI)flblkbuff.end,
 				(UI)padd,(UI)flblkbuff.sw,(UI)flblkbuff.diff);							
+#endif			
 			/* Here next CAN msg should be a EOB or EOF. */
 			flblkbuff.eobsw = 1;
 		}
