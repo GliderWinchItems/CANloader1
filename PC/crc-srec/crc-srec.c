@@ -65,6 +65,7 @@ FILE* fpIn;    // srec input file
 FILE* fpBin;   // bin input file
 FILE* fpS3out; // srec modified output file
 FILE* fpXbin;  // Special bin output file
+FILE* fpOut;   // CRC CHKSUM file
 
 
 // Our binary image
@@ -427,6 +428,34 @@ printf("bufsav1: %s\n",bufsav1);
 	printf ("Line count out: %5d\n\r",linectout);
 	printf ("Size our bin  : %5d 0x%08X\n\r",(int)ourbinctr*4,(int)ourbinctr*4);
 	printf ("Size compile b: %5d 0x%08X\n\r",(int)binfilectr,(int)binfilectr);
+
+	/* Used for checking CRC and CHKSUM against what BMS unit reports. */
+	time_t t = time(NULL);
+	struct tm tm = *localtime(&t);
+	char stim[64];
+	strftime(stim, 64, "%a, %d %b %Y %T %z",&tm);
+	char cline[128];
+	printf ("#######################################################################\n");
+  printf ("##   ID     CRC    CHKSUM    UNIX TIME\n");
+  sprintf (cline,"%s %08X %08lX %08lX %s\n",*(argv+2), crc2, binchksum, (unsigned long int)time, stim);
+  printf ("%s",cline);
+  printf ("########################################################################\n");
+  char bain[128];
+  strcpy (bain,"../params/");
+  strcat (bain,*(argv+2));
+	strcat (bain,"-crcchk.txt");
+	if ( (fpOut = fopen(bain,"a")) != NULL)
+	{
+		fwrite(cline,sizeof(char),strlen(cline),fpOut);
+		fclose(fpOut);
+		printf("wrote: %s\n",bain)	;
+
+	}
+	else
+	{
+		printf("crcchk file failed to open: %s\n",bain);
+	}
+
 
 	fclose(fpIn);
 	fclose(fpBin);
