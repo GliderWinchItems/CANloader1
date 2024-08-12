@@ -73,8 +73,6 @@ void Error_Handler(void);
 /* USER CODE END EFP */
 
 /* Private defines -----------------------------------------------------------*/
-#define RTC_wake_fetgate_Pin GPIO_PIN_13
-#define RTC_wake_fetgate_GPIO_Port GPIOC
 #define LED_GRN_Pin GPIO_PIN_12
 #define LED_GRN_GPIO_Port GPIOB
 #define LED_RED_Pin GPIO_PIN_13
