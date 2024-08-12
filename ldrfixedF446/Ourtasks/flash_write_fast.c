@@ -8,7 +8,7 @@
 
 
 */
-#include "stm32F4xx.h"
+#include "stm32f4xx.h"
 //#include "stm32l4xx_hal_flash.c"
 #include "flash_write_fast.h"
 #include <stddef.h>

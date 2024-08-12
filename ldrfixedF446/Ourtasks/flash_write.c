@@ -9,7 +9,7 @@
 09/27/2022 Update & test for STM32L431
 */
 
-#include "stm32F4xx.h"
+#include "stm32f4xx.h"
 //#include "stm32l4xx_hal_flash.c"
 #include "flash_write.h"
 
@@ -21,8 +21,8 @@
  *  @return	: 0 = unlocked; not zero = failed and locked until next reset.
 *******************************************************************************/
 #define FLASH_RDPRT_KEY 0x00A5	// Protection code
-#define FLASH_KEY1  0x45670123	// Unlock 1st
-#define FLASH_KEY2  0xCDEF89AB	// Unlock 2nd
+//#define FLASH_KEY1  0x45670123	// Unlock 1st
+//#define FLASH_KEY2  0xCDEF89AB	// Unlock 2nd
 
 #define ERR_FLGS 0xC3FB // Error flags
 

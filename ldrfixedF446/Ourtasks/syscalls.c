@@ -1,6 +1,6 @@
 #include  <errno.h>
 #include  <sys/unistd.h> // STDOUT_FILENO, STDERR_FILENO
-#include "stm32F4xx_hal.h"
+#include "stm32f4xx_hal.h"
 
 extern UART_HandleTypeDef huart1;
 

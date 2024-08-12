@@ -35,89 +35,48 @@ BUILD_DIR = build
 # C sources
 C_SOURCES =  \
 Core/Src/main.c \
-Core/Src/freertos.c \
-Middlewares/Third_Party/FreeRTOS/Source/croutine.c \
-Middlewares/Third_Party/FreeRTOS/Source/event_groups.c \
-Middlewares/Third_Party/FreeRTOS/Source/list.c \
-Middlewares/Third_Party/FreeRTOS/Source/queue.c \
-Middlewares/Third_Party/FreeRTOS/Source/stream_buffer.c \
-Middlewares/Third_Party/FreeRTOS/Source/tasks.c \
-Middlewares/Third_Party/FreeRTOS/Source/timers.c \
-Middlewares/Third_Party/FreeRTOS/Source/portable/MemMang/heap_4.c \
-Middlewares/Third_Party/FreeRTOS/Source/portable/GCC/ARM_CM4F/port.c \
-Core/Src/stm32f4xx_it.c \
+Core/Src/stm32l4xx_it.c \
 Core/Src/stm32f4xx_hal_msp.c \
 Core/Src/stm32f4xx_hal_timebase_tim.c \
-Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_adc.c \
-Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_adc_ex.c \
-Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_ll_adc.c \
+Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal.c \
+Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_i2c.c \
+Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_i2c_ex.c \
 Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_rcc.c \
 Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_rcc_ex.c \
 Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_flash.c \
 Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_flash_ex.c \
 Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_flash_ramfunc.c \
 Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_gpio.c \
-Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_dma_ex.c \
 Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_dma.c \
+Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_dma_ex.c \
 Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_pwr.c \
 Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_pwr_ex.c \
 Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_cortex.c \
-Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal.c \
 Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_exti.c \
 Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_can.c \
 Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_tim.c \
 Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_tim_ex.c \
 Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_uart.c \
 Core/Src/system_stm32f4xx.c \
-Middlewares/Third_Party/FreeRTOS/Source/CMSIS_RTOS/cmsis_os.c
+Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_crc.c \
+#Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_crc_ex.c
+#Drivers/STM32F4xx_HAL_Driver/Src/stm32f4xx_hal_uart_ex.c \
 
-# /* USER CODE BEGIN */
-
-C_SOURCES += Ourwares/SerialTaskSend.c 
 C_SOURCES += Ourwares/DTW_counter.c
-C_SOURCES += Ourwares/CanTask.c
+C_SOURCES += Ourwares/morse.c
 C_SOURCES += Ourwares/can_iface.c
 C_SOURCES += Ourwares/canfilter_setup.c
-C_SOURCES += Ourwares/getserialbuf.c
-C_SOURCES += Ourwares/yprintf.c
-C_SOURCES += Ourwares/SerialTaskReceive.c
-C_SOURCES += Ourwares/yscanf.c
-C_SOURCES += Ourwares/morse.c
-C_SOURCES += Ourwares/payload_extract.c
-#C_SOURCES += Ourwares/MailboxTask.c
-#C_SOURCES += Ourwares/adctask.c
-#C_SOURCES += Ourwares/ADCTask.c
 
-#C_SOURCES += Ourtasks/adcfastsum16.c
-#C_SOURCES += Ourtasks/adcparams.c
-#C_SOURCES += Ourtasks/adcparamsinit.c
+C_SOURCES += Ourwares/crc/crc-32_nib.c
+C_SOURCES += Ourwares/crc/crc-32_min.c
+C_SOURCES += Ourtasks/crc/crc-32_hw.c
+C_SOURCES += Ourtasks/crc/crc-32_sw.c
 
-#C_SOURCES += Ourtasks/adc_idx_v_struct.c
-#C_SOURCES += params/$(ADC_PARAM)
-C_SOURCES += params/$(EMC_PARAM)
-
-#C_SOURCES += Ourtasks/iir_f1.c
-#C_SOURCES += Ourtasks/iir_filter_lx.c
-#C_SOURCES += Ourtasks/fetonoff.c
-#C_SOURCES += Ourtasks/bqview.c
-#C_SOURCES += Ourtasks/bq_func_init.c
-#C_SOURCES += Ourtasks/LedTask.c
-#C_SOURCES += Ourtasks/bq_items.c
-#C_SOURCES += Ourtasks/chgr_items.c
-#C_SOURCES += Ourtasks/CanCommTask.c
-#C_SOURCES += Ourtasks/cancomm_items.c
-#C_SOURCES += Ourtasks/fanop.c
-#C_SOURCES += Ourtasks/bmsspi.c
-#C_SOURCES += Ourtasks/BMSTask.c
-#C_SOURCES += Ourtasks/pec15_reg.c
-#C_SOURCES += Ourtasks/bms_items.c
-#C_SOURCES += Ourtasks/rtcregs.c
-#C_SOURCES += Ourtasks/RyTask.c
-#C_SOURCES += Ourtasks/EMCLTask.c
-#C_SOURCES += Ourtasks/CoolingTask.c
-
-# /* USER CODE END */ 
-
+C_SOURCES += Ourtasks/syscalls.c
+C_SOURCES += Ourtasks/system_reset.c
+C_SOURCES += Ourtasks/canwinch_ldrproto.c
+C_SOURCES += Ourtasks/flash_write.c
+#C_SOURCES += Ourtasks/flash_write_fast.c
 
 # ASM sources
 ASM_SOURCES =  \
@@ -185,19 +144,16 @@ AS_INCLUDES =  \
 # C includes
 C_INCLUDES =  \
 -ICore/Inc \
--IDrivers/STM32L4xx_HAL_Driver/Inc \
--IDrivers/STM32L4xx_HAL_Driver/Inc/Legacy \
--IMiddlewares/Third_Party/FreeRTOS/Source/include \
--IMiddlewares/Third_Party/FreeRTOS/Source/portable/GCC/ARM_CM4F \
--IDrivers/CMSIS/Device/ST/STM32L4xx/Include \
 -IDrivers/CMSIS/Include \
 -IDrivers/STM32F4xx_HAL_Driver/Inc \
 -IDrivers/STM32F4xx_HAL_Driver/Inc/Legacy \
 -IDrivers/CMSIS/Device/ST/STM32F4xx/Include \
--IMiddlewares/Third_Party/FreeRTOS/Source/CMSIS_RTOS
+-IDrivers/CMSIS/Include
 
 C_INCLUDES += -IOurwares 
 C_INCLUDES += -IOurtasks
+C_INCLUDES += -IOurtasks/crc
+C_INCLUDES += -I../../../GliderWinchCommons/embed/svn_common/trunk
 
 # compile gcc flags
 ASFLAGS = $(MCU) $(AS_DEFS) $(AS_INCLUDES) $(OPT) -Wall -fdata-sections -ffunction-sections 

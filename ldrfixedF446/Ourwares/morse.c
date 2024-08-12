@@ -5,10 +5,10 @@
 *******************************************************************************/
 #include <stdint.h>
 #include "DTW_counter.h"
-#include "stm32l4xx_hal.h"
+#include "stm32f4xx_hal.h"
 #include "main.h"
 
-#define TICPERSEC (16000000)
+#define TICPERSEC (180000000) // Sys clock freq
 #define TIC_DIT (TICPERSEC/6)
 #define TIC_DAH (TIC_DIT*4)
 #define TIC_IDIT (TIC_DIT*1.3)
@@ -16,7 +16,7 @@
 #define TIC_IWORD (TIC_ICHAR *3)
 #define TIC_PAUSE (TICPERSEC*1) // Pause between code sequence
 
-#define LEDALL (GPIO_PIN_0|GPIO_PIN_1)
+#define LEDALL (LED_RED_Pin|LED_GRN_Pin)
 
 struct MORSE_ELEMENT
 {
@@ -88,7 +88,7 @@ static void delay(uint32_t ticks, uint32_t pin, uint8_t on)
 	uint32_t tx = DTWTIME + ticks;
 	while ((int32_t)(tx - DTWTIME) > 0)
 	{
-			HAL_GPIO_WritePin(GPIOB, pin, on); 
+			HAL_GPIO_WritePin(LED_RED_GPIO_Port, pin, on); 
 	}
 	return;
 }
@@ -191,8 +191,8 @@ void morse_trap(uint32_t x)
 __asm__ volatile ("CPSID I");
 	while(1==1)
 	{
-		morse_number(x, (GPIO_PIN_0|GPIO_PIN_1));
-		delay(TIC_PAUSE, (GPIO_PIN_0|GPIO_PIN_1), GPIO_PIN_SET);	
+		morse_number(x, (LED_RED_Pin|LED_GRN_Pin));
+		delay(TIC_PAUSE, (LED_RED_Pin|LED_GRN_Pin), GPIO_PIN_SET);	
 	}
 }
 /* *************************************************************************

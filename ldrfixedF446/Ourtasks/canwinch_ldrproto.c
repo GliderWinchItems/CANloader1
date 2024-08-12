@@ -25,7 +25,7 @@ One XL flash block = 2048 bytes = 256 8 byte payloads
 Plus unknown amount of write flash time.
 
 */
-#include "stm32l431xx.h"
+#include "stm32f4xx.h"
 #include "canwinch_ldrproto.h"
 //#include "flash_write.h"
 //#include "hwcrc.h"

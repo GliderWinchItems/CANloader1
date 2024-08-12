@@ -22,8 +22,8 @@ at all times.
 #define NULL	0
 #endif
 
-#include "stm32l4xx_hal.h"
-#include "stm32l4xx_hal_can.h"
+#include "stm32f4xx_hal.h"
+#include "stm32f4xx_hal_can.h"
 #include "common_can.h"
 
 /* Received CAN msg plus CAN module identification */

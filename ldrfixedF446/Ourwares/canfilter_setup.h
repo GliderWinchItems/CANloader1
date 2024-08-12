@@ -7,8 +7,8 @@
 #ifndef __CANFILTER_SETUP
 #define __CANFILTER_SETUP
 
-#include "stm32l4xx_hal.h"
-#include "stm32l4xx_hal_can.h"
+#include "stm32f4xx_hal.h"
+#include "stm32f4xx_hal_can.h"
 //#include "FreeRTOS.h"
 
 /* *************************************************************************/
