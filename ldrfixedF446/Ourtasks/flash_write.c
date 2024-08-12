@@ -9,7 +9,7 @@
 09/27/2022 Update & test for STM32L431
 */
 
-#include "stm32l431xx.h"
+#include "stm32F4xx.h"
 //#include "stm32l4xx_hal_flash.c"
 #include "flash_write.h"
 
