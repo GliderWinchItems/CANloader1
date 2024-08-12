@@ -433,7 +433,7 @@ printf("bufsav1: %s\n",bufsav1);
 	time_t t = time(NULL);
 	struct tm tm = *localtime(&t);
 	char stim[64];
-	strftime(stim, 64, "%a, %d %b %Y %T %z",&tm);
+	strftime(stim, 64, "%a %d %b %Y %T %z",&tm);
 	char cline[128];
 	printf ("#######################################################################\n");
   printf ("##   ID     CRC    CHKSUM    UNIX TIME\n");

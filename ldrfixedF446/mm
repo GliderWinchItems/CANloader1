@@ -1,0 +1,16 @@
+#!/bin/bash
+
+export FLOAT_TYPE=hard
+
+rm build/ldrfixedL431.elf
+
+export I_AM_CANID=0x$1
+
+echo %%%% I_AM_CANID $I_AM_CANID %%%%
+
+make clean
+
+make 
+
+./script-all ldrfixedL431
+
