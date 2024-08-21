@@ -2,7 +2,7 @@
 
 export FLOAT_TYPE=hard
 
-rm build/ldrfixedL431.elf
+rm build/ldrfixedF446.elf
 
 export I_AM_CANID=0x$1
 
@@ -12,5 +12,5 @@ make clean
 
 make 
 
-./script-all ldrfixedL431
+./script-all ldrfixedF446
 

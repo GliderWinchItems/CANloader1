@@ -1,2 +1,2 @@
 #!/bin/bash
-$ARM_PREFIX/bin/arm-none-eabi-objcopy -O srec ldrfixedL431.elf ldrfixedL431.srec
+$ARM_PREFIX/bin/arm-none-eabi-objcopy -O srec ldrfixedF446.elf ldrfixedF446.srec

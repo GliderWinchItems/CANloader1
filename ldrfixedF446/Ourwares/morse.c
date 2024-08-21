@@ -189,11 +189,16 @@ void morse_trap(uint32_t x)
 {
 	/* Disable global interrupts */
 __asm__ volatile ("CPSID I");
-	while(1==1)
+	for (int i=0; i < 2; i++)
 	{
 		morse_number(x, (LED_RED_Pin|LED_GRN_Pin));
 		delay(TIC_PAUSE, (LED_RED_Pin|LED_GRN_Pin), GPIO_PIN_SET);	
 	}
+
+	// Execute a RESET
+	#define SCB_AIRCR 0xE000ED0C
+	*(volatile unsigned int*)SCB_AIRCR = (0x5FA << 16) | 0x4;	// Cause a RESET
+	while (1==1);	
 }
 /* *************************************************************************
  * void morse_hex(uint32_t n, uint32_t pin);

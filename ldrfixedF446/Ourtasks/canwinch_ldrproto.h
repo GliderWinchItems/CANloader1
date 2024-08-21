@@ -15,6 +15,9 @@
 #include "common_misc.h"
 #include "common_can.h"
 
+/* SRAM buffer size (bytes) */
+#define PGBUFSIZE 2048
+
 /******************************************************************************/
 void sendcanCMD_PAY1(uint8_t cmd,uint8_t pay1);
 /* @brief	: send a CAN msg with a command byte and status type byte
@@ -29,6 +32,10 @@ void canwinch_ldrproto_poll(unsigned int i_am_canid);
 /* @param	: i_am_canid = CAN ID for this unit
  * @brief	: If msg is for this unit, then do something with it.
  * ************************************************************************************** */
+void delayed_morse_trap(uint32_t code);
+/* @brief	: delay 1/2 sec for printf to complete, then do morse_trap
+ * @param	: code = trap code in morse on leds
+ ******************************************************************************/
 
 
 

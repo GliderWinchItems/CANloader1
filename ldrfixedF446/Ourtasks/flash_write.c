@@ -1,18 +1,17 @@
 /******************************************************************************
 * File Name          : flash_write.c
 * Date First Issued  : 09/27/2022
-* Board              : bmsadbms1818
-* Description        : flash write: STM32L431 standard mode
+* Board              : stm32F446
+* Description        : flash write
 *******************************************************************************/
 /*
 07/28/2013 Original flash_write.c
 09/27/2022 Update & test for STM32L431
+08/14/2024 Revisions for STM32F446
 */
 
 #include "stm32f4xx.h"
-//#include "stm32l4xx_hal_flash.c"
 #include "flash_write.h"
-
 #include "DTW_counter.h"
 
 /******************************************************************************
@@ -23,6 +22,7 @@
 #define FLASH_RDPRT_KEY 0x00A5	// Protection code
 //#define FLASH_KEY1  0x45670123	// Unlock 1st
 //#define FLASH_KEY2  0xCDEF89AB	// Unlock 2nd
+#define FLASH_SIZE_DATA_REGISTER 0x1FFF7A22
 
 #define ERR_FLGS 0xC3FB // Error flags
 
@@ -132,94 +132,52 @@ __DSB();
 }
 #endif
 
-#if 0
-uint32_t flash_err;
-int flash_write(uint64_t *pflash, uint64_t *pfrom, int count)
-{
-	int i;
-	flash_err = 0;
-
-	/* Don't ruin the CANloader! */
-	if ((uint32_t*)pflash < &__appbegin)  return -3;
-
-//	if (flash_unlock() != 0) return -4;
-
-	while ((FLASH->SR & 0x1) != 0);	// Wait for busy to go away
-
-	for (i = 0; i < count; i++)
-	{
-	
-		while ((FLASH->SR & 0x1) != 0);	// Wait for busy to go away
-		
-		/* Clear any existing error flags. */
-		FLASH->SR |= ERR_FLGS; 
-
-		/* Set PG (flash program bit) */
-		FLASH->CR |= 0x1;  
-
-		/* Send two words to flash */
-		*pflash++ = *pfrom++; 
-
-		/* Wait for busy to go away */
-		while ((FLASH->SR & (1 << 16)) != 0);	
-
-		flash_err |= FLASH->SR;			
-	}	
-	/* Clear PG (flash program bit) */
-	FLASH->CR &= ~0x1; 
-
-	if ( (flash_err & (FLASH_SR_WRPERR | FLASH_SR_PGAERR)) != 0) return -5;	
-	return 0;
-}
-#endif
 /******************************************************************************
- * int flash_erase(uint64_t* pflash);
- *  @brief 	: Erase one page
- *  @param	: pflash = double word pointer to address in flash
+ * int flash_erase(uint8_t secnum);
+ *  @brief 	: Erase sector
+ *  @param	: secnum = sector number (F446: 0 - 7)
  *  @return	: 
  *           0 = success
- *          -3 = address below start of flash
  *          -4 = unlock sequence failed for lower bank
  *          -5 = error at some point in the writes, flash_err has the bits
 *******************************************************************************/
 /*
-To erase a page (2 Kbyte), follow the procedure below:
-1. Check that no Flash memory operation is ongoing by checking the BSY bit in the Flash
-status register (FLASH_SR).
-2. Check and clear all error programming flags due to a previous programming. If not,
-PGSERR is set.
-3. Set the PER bit and select the page you wish to erase (PNB) in the Flash control
-register (FLASH_CR).
-4. Set the STRT bit in the FLASH_CR register.
-5. Wait for the BSY bit to be cleared in the FLASH_SR register.
+==> For F446 <== Sector Erase
+To erase a sector, follow the procedure below:
+1.Check that no Flash memory operation is ongoing by checking the BSY bit in the
+FLASH_SR register
+2.Set the SER bit and select the sector out of the 7 sectors in the main memory block you
+wish to erase (SNB) in the FLASH_CR register
+3.Set the STRT bit in the FLASH_CR register
+4.Wait for the BSY bit to be cleared.
 */
 
-int flash_erase(uint64_t *pflash)
+int flash_erase(uint8_t secnum)
 {
 	flash_err = 0;
 
-	/* Don't erase the CANloader! */
-	if ((uint32_t*)pflash < &__appbegin)  return -3;
+	/* Don't erase the CANloader (in F446)! */
+	if (secnum < 4)  return -3;
 __DSB();		
-	while ((FLASH->SR & 0x1) != 0);	// Wait for busy to go away
+	while ((FLASH->SR & 0x1) != 0);	// JIC: Wait for busy to go away
 
 	if (flash_unlock() != 0) return -4;
 
 	/* Clear any existing error flags. */
 	FLASH->SR |= ERR_FLGS; 
 
-	/* Set the PER bit and select the page */
-	FLASH->CR  &= ~((0x7FF) << 3); // Clear old page number
-	uint16_t tmp = ((uint32_t)pflash >> 11); // New page number
-	FLASH->CR  |=  (tmp << 3) | 0x2; // New page | Enable page erase
+	/* Set flash sector number and sector erase enable */
+	FLASH->CR  &= ~((0xF) << 3); // Clear old sector number
+	FLASH->CR  |=  ((secnum << 3) | 0x2); // SNB | SER
 __DSB();		
+
 	/* Start erase. */
 	FLASH->CR |= (1<<16); // Start bit
 __DSB();
 	/* Wait for busy to go away. */
 	while ((FLASH->SR & 0x1) != 0);
 
-	FLASH->CR &= ~FLASH_CR_PER; // Remove PER bit
+	FLASH->CR &= ~FLASH_CR_SER; // Remove Sector erase bit
 __DSB();			
 	flash_err |= FLASH->SR;
 
@@ -227,3 +185,48 @@ __DSB();
 	return 0;
 }
 
+/******************************************************************************
+ * int flash_sector(struct SECINFO* p, uint64_t* pflash);
+ *  @brief 	: Determine sector info: base addr, size, sector number
+ *  @param	: p = pointer to received copy of fixed info
+ *  @param  : pflash = pointer to address in flash
+ *  @return	: 0 = success; -1 = out-of-bounds
+ ******************************************************************************/
+/* Sector info: base, size, number */
+static const struct SECINFO secinfo[] = {
+{(uint64_t*)0x08000000, 0x04000, 0}, /*  16K */
+{(uint64_t*)0x08004000, 0x04000, 1}, /*  16K */
+{(uint64_t*)0x08008000, 0x08000, 2}, /*  16K */
+{(uint64_t*)0x0800C000, 0x0C000, 3}, /*  16K */
+{(uint64_t*)0x08010000, 0x10000, 4}, /*  64K */
+{(uint64_t*)0x08020000, 0x20000, 5}, /* 128K */
+{(uint64_t*)0x08040000, 0x40000, 6}, /* 128K */
+{(uint64_t*)0x08060000, 0x60000, 7}, /* 128K */
+};
+
+int flash_sector(struct SECINFO* p, uint64_t* pflash)
+{
+	int idx = 0; // secinfo[idx]
+
+	/* Get flashsize and compute start and end+1 addresses. */
+	// Flash size register returns size in K bytes.
+	uint16_t flashsize = *((uint16_t*)FLASH_SIZE_DATA_REGISTER);
+	uint64_t* pbase = (uint64_t*)0x08000000;
+	// End of flash address + 1
+	uint64_t* pmax  = (uint64_t*)((uint8_t*)pbase + flashsize*0x400);
+
+	/* Check if pflash is within range of flash. */
+	if ((pflash <  pbase) ||
+	    (pflash >= pmax ) )
+	return -1; // Err: pflash is outside of flash.
+	
+	for (int i = 7; i >= 0; i--)
+	{
+		if (pflash >= secinfo[i].pbase)
+		{
+			*p = secinfo[idx]; // Copy struct to working struct
+			return 0; // Success			
+		}
+	}
+	return -2; // Never never land
+}

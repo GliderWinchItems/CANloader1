@@ -136,8 +136,6 @@ char* buffer = "\n\rX ldrfixedL431 started 123";
 #define PUTCHAR_PROTOTYPE int fputc(int ch, FILE *f)
 #endif
 
-
-
 PUTCHAR_PROTOTYPE
 {
   HAL_UART_Transmit(&huart1, (uint8_t *)&ch, 1, HAL_MAX_DELAY);

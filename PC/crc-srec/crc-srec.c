@@ -437,19 +437,18 @@ printf("bufsav1: %s\n",bufsav1);
 	char cline[128];
 	printf ("#######################################################################\n");
   printf ("##   ID     CRC    CHKSUM    UNIX TIME\n");
-  sprintf (cline,"%s %08X %08lX %08lX %s\n",*(argv+2), crc2, binchksum, (unsigned long int)time, stim);
+  sprintf (cline,"%s %08X %08lX %08lX %s\n",*(argv+1), crc2, binchksum, (unsigned long int)time, stim);
   printf ("%s",cline);
   printf ("########################################################################\n");
   char bain[128];
   strcpy (bain,"../params/");
-  strcat (bain,*(argv+2));
+  strcat (bain,*(argv+1));
 	strcat (bain,"-crcchk.txt");
 	if ( (fpOut = fopen(bain,"a")) != NULL)
 	{
 		fwrite(cline,sizeof(char),strlen(cline),fpOut);
 		fclose(fpOut);
 		printf("wrote: %s\n",bain)	;
-
 	}
 	else
 	{

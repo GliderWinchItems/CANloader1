@@ -6,13 +6,12 @@
   ******************************************************************************
   * @attention
   *
-  * <h2><center>&copy; Copyright (c) 2022 STMicroelectronics.
-  * All rights reserved.</center></h2>
+  * Copyright (c) 2024 STMicroelectronics.
+  * All rights reserved.
   *
-  * This software component is licensed by ST under BSD 3-Clause license,
-  * the "License"; You may not use this file except in compliance with the
-  * License. You may obtain a copy of the License at:
-  *                        opensource.org/licenses/BSD-3-Clause
+  * This software is licensed under terms that can be found in the LICENSE file
+  * in the root directory of this software component.
+  * If no LICENSE file comes with this software, it is provided AS-IS.
   *
   ******************************************************************************
   */
@@ -39,8 +38,7 @@
 
 extern uint32_t __appbegin;
 
-#define SYSCLOCKFREQ 16000000
-
+#define SYSCLOCKFREQ 180000000
 /* &&&&&&&&&&&&& Each node on the CAN bus gets a unit number &&&&&&&&&&&&&&&&&&&&&&&&&& */
 #include "db/gen_db.h"
 #define   IAMUNITNUMBER   CANID_UNIT_BMS03  /* Fixed loader (serial number concept) */
@@ -63,7 +61,7 @@ struct CAN_CTLBLOCK* pctl1;
 
 /* Private typedef -----------------------------------------------------------*/
 /* USER CODE BEGIN PTD */
- uint32_t flashblocksize1;
+uint32_t pgblocksize1;
  uint32_t unique_id[3];
  uint32_t can_waitdelay_ct;
  uint32_t end_flash;
@@ -92,11 +90,11 @@ uint32_t debugTX1b_prev;
 
 uint32_t debugTX1c;
 uint32_t debugTX1c_prev;
-
 /* USER CODE END PTD */
 
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
+
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
@@ -108,7 +106,7 @@ uint32_t debugTX1c_prev;
 CAN_HandleTypeDef hcan1;
 CAN_HandleTypeDef hcan2;
 
-RTC_HandleTypeDef hrtc;
+IWDG_HandleTypeDef hiwdg;
 
 UART_HandleTypeDef huart3;
 DMA_HandleTypeDef hdma_usart3_rx;
@@ -121,13 +119,13 @@ DMA_HandleTypeDef hdma_usart3_tx;
 /* Private function prototypes -----------------------------------------------*/
 void SystemClock_Config(void);
 static void MX_GPIO_Init(void);
-static void MX_CAN1_Init(void);
-static void MX_CAN2_Init(void);
 static void MX_DMA_Init(void);
 static void MX_USART3_UART_Init(void);
-static void MX_RTC_Init(void);
+static void MX_CAN1_Init(void);
+static void MX_CAN2_Init(void);
+static void MX_IWDG_Init(void);
 /* USER CODE BEGIN PFP */
-char* buffer = "\n\rX ldrfixedL431 started 123";
+char* buffer = "\n\rX ldrfixedF446 started 123";
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
@@ -137,8 +135,6 @@ char* buffer = "\n\rX ldrfixedL431 started 123";
 #else
 #define PUTCHAR_PROTOTYPE int fputc(int ch, FILE *f)
 #endif
-
-
 
 PUTCHAR_PROTOTYPE
 {
@@ -153,18 +149,24 @@ PUTCHAR_PROTOTYPE
   */
 int main(void)
 {
+
   /* USER CODE BEGIN 1 */
    volatile uint32_t dtw; // DTW time
 /* --------------------- Type of RESET detection and dispatch ------------------------------------- */
   extern void* __appjump; // Defined in ldr.ld file
   /* Check type of RESET and set us on the correct journey. */
   uint32_t rcc_csr = RCC->CSR;  // Get reset flags
-  RCC->CSR |= (1 << 23); // Bit 23 RMVF: Remove reset flag (prep for next RESET)
+  /* NOTE: RMVF is bit 23 for L431. */
+  RCC->CSR |= (1 << 24); // Bit 24 RMVF: Remove reset flag (prep for next RESET)
   if (rcc_csr & (1 << 29))  // Was it Independent watchdog reset flag?
   { // Here, yes. This should be the result of a valid load process
 
+//SystemClock_Config();
+//MX_GPIO_Init();
+//HAL_GPIO_WritePin(GPIOB, LED_GRN_Pin, GPIO_PIN_RESET);HAL_GPIO_WritePin(GPIOB, LED_RED_Pin, GPIO_PIN_SET);while(1==1);
+
     /* Shift vector table to new position. */
-    *(uint32_t*)ADDR_SCB_VTOR = 0x8000;
+    *(uint32_t*)ADDR_SCB_VTOR = 0xC000;
 
     __DSB(); // Data barrier sync, JIC
 
@@ -193,18 +195,21 @@ int main(void)
 
   /* Initialize all configured peripherals */
   MX_GPIO_Init();
-  MX_CAN1_Init();
-  MX_CAN2_Init();
   MX_DMA_Init();
   MX_USART3_UART_Init();
-  MX_RTC_Init();
+  MX_CAN1_Init();
+  MX_CAN2_Init();
+  MX_IWDG_Init();
   /* USER CODE BEGIN 2 */
   DTW_counter_init();
 
   /* CAN ID for this node is passed in to make from command line. */
   unsigned int i_am_canid = I_AM_CANID;
 
-   printf("\n\n\n\r######### ldrfixedL431 STARTS 1, 0x%0X",i_am_canid);
+   printf("\n\n\n\r######### ldrfixedL431 STARTS 1, 0x%0X\n",i_am_canid);
+
+   // CubeMX may have these initially RESET which is ON.
+   HAL_GPIO_WritePin(GPIOB, LED_RED_Pin|LED_GRN_Pin, GPIO_PIN_SET);   
 
 /* Setup TX linked list for CAN  */
    // CAN1 (CAN_HandleTypeDef *phcan, uint8_t canidx, uint16_t numtx, uint16_t numrx);
@@ -233,80 +238,22 @@ int main(void)
     CAN_IT_RX_FIFO1_MSG_PENDING    );
 
 
-  #define DTW_INC_printf (1000 * 16000) // 16 MHz sysclock
+  #define DTW_INC_printf (1000 * 180000) // 180 MHz sysclock
   uint32_t DTW_next_LED = DTWTIME;
-  #define DTW_INC_LED (250 * 16000)
+  #define DTW_INC_LED (250 * 180000)
   uint32_t DTW_next_printf = DTWTIME;
  
   unsigned int mctr = 0;
-#if 0
-  printf ("\n\rControl/status register (RCC_CSR) : %08x\n\r",(unsigned int)RCC->CSR);
-  RCC->CSR |= (1 << 24);
-  printf ("Control/status register (RCC_CSR) : %08x After RMVF written\n\r",(unsigned int)RCC->CSR);
-  RCC->CSR |= (7 << 29);
-  printf ("Control/status register (RCC_CSR) : %08x After LPWR written\n\r",(unsigned int)RCC->CSR);
 
-  //uint64_t zz1 = 0x12345678ABCDEF01; // word order
-  uint64_t zz1 = 0x1122334455667788;
-  //uint64_t zz = 0x01efCDab78563412;  // byte order of zz1
-  uint64_t zz = 0x8877665544332211;
-  uint32_t ww[2] = {0x88776655,0x44332211};
-  uint32_t wwa[2] = {0x44332211,0x88776655};
-  //https://crccalc.com/
-  uint8_t zzb[8] = {0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77, 0x88};
- 
- #define PDATA (uint32_t*)0x08008000
-  #define DLEN  100000
-
-  printf("\n\rPDATA: 0x%08X DLEN: %5d\n\r",(unsigned int)PDATA,(unsigned int)DLEN);
-
- CRC->CR =0x01;
- HAL_CRC_Init(&hcrc);
-  uint32_t t2;
-  uint32_t t1 = DTWTIME;
-  uint32_t crc3 = HAL_CRC_Calculate(&hcrc, PDATA, DLEN/4);
-  uint32_t t2x = DTWTIME - t1;
-
-  rc_crc32_hw_init();
-
-  
-  t1 = DTWTIME;
-  uint32_t crc1 = rc_crc32_sw((uint8_t*)PDATA, DLEN); // CRC1: B9196C38 = web site
-  t2 = DTWTIME - t1;
-  printf("CRC1   sw rosetta: %08X  %08X %7d %6d\n\r",(unsigned int)crc1,(unsigned int)~crc1,(unsigned int)t2,(unsigned int)t2/16);
-  
-  t1 = DTWTIME;
-  uint32_t crc2 = rc_crc32_hw(PDATA, DLEN/4);
-  t2 = DTWTIME - t1;
-  printf("CRC2   hw crc mod: %08X  %08X %7d %6d\n\r",(unsigned int)~crc2,(unsigned int)crc2,(unsigned int)t2,(unsigned int)t2/16);
-
-  printf("CRC3 HAL CRC CALC: %08X  %08X %7d %6d\n\r",(unsigned int)crc3,(unsigned int)~crc3,(unsigned int)t2x,(unsigned int)t2x/16);
-
-  t1 = DTWTIME;
-  uint32_t crc4 = crc_32_nib_calc(PDATA, DLEN/4);
-  t2 = DTWTIME - t1;
-  printf("CRC4 nibble table: %08X  %08X %7d %6d\n\r",(unsigned int)crc4,(unsigned int)~crc4,(unsigned int)t2,(unsigned int)t2/16);
-
-  t1 = DTWTIME;
-  uint32_t crc5 = crc_32_min_calc(PDATA, DLEN/4);
-  t2 = DTWTIME - t1;
-  printf("CRC5 min,no table: %08X  %08X %7d %6d\n\r",(unsigned int)crc5,(unsigned int)~crc5,(unsigned int)t2,(unsigned int)t2/16);
-
-  printf("\n\r");
-//while(1==1);
-
-#endif
-
-  flashblocksize1 = 2048; // 
+  pgblocksize1 = PGBUFSIZE; // 
   unique_id[0] = *(uint32_t*)(ADDR_UNIQUE_ID+0);
   unique_id[1] = *(uint32_t*)(ADDR_UNIQUE_ID+1);
   unique_id[2] = *(uint32_t*)(ADDR_UNIQUE_ID+2);
   flashsize = *(uint16_t*)ADDR_FLASH_SIZE;
   end_flash = flashsize*1024 + 0x08000000;
-  printf("\n\rUnique ID : %08X%08X%08X",(unsigned int)unique_id[0],(unsigned int)unique_id[1],(unsigned int)unique_id[2]);
+  printf("\n\rUnique ID : %08X %08X %08X",(unsigned int)unique_id[0],(unsigned int)unique_id[1],(unsigned int)unique_id[2]);
   printf("\n\rFlash size:     %uK\n\r",(unsigned int)flashsize);
   printf("\n\rEnd addr  :    0x%08X end_flash\n\r",(unsigned int)end_flash);
-
 
   /* ----------------------- Header for columns of CAN error printf ------------------------------------- */
 //canwinch_pod_common_systick2048_printerr_header();
@@ -332,14 +279,14 @@ int main(void)
   /* ----------------- CRC|checksum check of application. ---------------------------------- */
   // Get addresses
   unsigned int app_entry_tmp = (unsigned int)__appjump & ~1L;
-//  printf("app_entry_tmp: %08X\n\r",app_entry_tmp);
+printf("app_entry_tmp: %08X\n\r",app_entry_tmp);
 //  uint32_t* papp_entry = (uint32_t*)((uint32_t)(*(uint32_t**)__appjump) & ~1L);
   uint32_t* papp_entry = (uint32_t*)app_entry_tmp;
   if ((papp_entry >= (uint32_t*)(&__appbegin + (flashsize*1024))) || (papp_entry < (uint32_t*)&__appbegin))
   { // Here bogus address (which could crash processor)
     apperr |= APPERR_APP_ENTRY_OOR;
-//    printf("papp_entry err: %08X %08X %08X\n\r",(unsigned int)papp_entry,(unsigned int)(&__appbegin + (flashsize*1024)),
-//      (unsigned int)&__appbegin);
+printf("papp_entry err: %08X %08X %08X\n\r",(unsigned int)papp_entry,(unsigned int)(&__appbegin + (flashsize*1024)),
+      (unsigned int)&__appbegin);
   }
   else
   {
@@ -405,7 +352,6 @@ int main(void)
     apperr |= APPERR_APP_CHK_NE;
     printf("CHK ERR: 0x%08x 0x%08x\n\r",(unsigned int)binchksum,*(unsigned int*)(papp_crc+1));
   }
-
   HAL_CAN_Start(&hcan1); // CAN1
   waitctr = 0;
 
@@ -418,7 +364,7 @@ int main(void)
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
-//    HAL_Delay(1000);
+  //    HAL_Delay(1000);
 
     /* Time how long squelch will be in effect. */
     if ((squelch_flag != 0) && ((int32_t)(DTWTIME - dtwmsnext) > 0))
@@ -444,12 +390,12 @@ int main(void)
     if ((int32_t)(DTWTIME - DTW_next_LED) > 0)
     {
       DTW_next_LED = DTW_next_LED + DTW_INC_LED;
-      if ((GPIOB->ODR & (1<<1)) == 0) 
-           GPIOB->BSRR = (1<<1);
+      if ((GPIOB->ODR & (1<<13)) == 0) 
+           GPIOB->BSRR = (1<<13);
       else 
-           GPIOB->BSRR = (1<<(1+16));
+           GPIOB->BSRR = (1<<(13+16));
     }
-
+IWDG->KR  = 0xAAAA; // Reload the watchdog
     /* Do loader'ing, if there are applicable msgs. */
     canwinch_ldrproto_poll(i_am_canid); // Filter CAN id
 
@@ -478,22 +424,24 @@ printf("wait %d:",(unsigned int)waitctr);
             system_reset(); // Software reset
             // system_reset never returns
           }
+printf("\n\rWatchdow set\n\r");
           // Here, no apperr.
           dtw = (DTWTIME + (SYSCLOCKFREQ/2)); // Wait 1/2 sec for printf to complete
           while (  ((int)dtw - (int)(DTWTIME)) > 0 );
           /* Set Indpendent Watch Dog and let it cause a reset. */
+          
           RCC->CSR |= (1<<0);   // LSI enable, necessary for IWDG
           while ((RCC->CSR & (1<<1)) == 0);  // wait till LSI is ready
             IWDG->KR  = 0x5555; // enable write to PR, RLR
             IWDG->PR  = 0;      // Init prescaler
-            IWDG->RLR = 0x02;   // Init RLR
+            IWDG->RLR = 0x100;  // Init RLR
             IWDG->KR  = 0xAAAA; // Reload the watchdog
             IWDG->KR  = 0xCCCC; // Start the watchdog
           while (1==1);
         }
       }
     }         
-  }
+  }  
   /* USER CODE END 3 */
 }
 
@@ -510,12 +458,13 @@ void SystemClock_Config(void)
   */
   __HAL_RCC_PWR_CLK_ENABLE();
   __HAL_PWR_VOLTAGESCALING_CONFIG(PWR_REGULATOR_VOLTAGE_SCALE1);
+
   /** Initializes the RCC Oscillators according to the specified parameters
   * in the RCC_OscInitTypeDef structure.
   */
-  RCC_OscInitStruct.OscillatorType = RCC_OSCILLATORTYPE_HSE|RCC_OSCILLATORTYPE_LSE;
+  RCC_OscInitStruct.OscillatorType = RCC_OSCILLATORTYPE_LSI|RCC_OSCILLATORTYPE_HSE;
   RCC_OscInitStruct.HSEState = RCC_HSE_ON;
-  RCC_OscInitStruct.LSEState = RCC_LSE_ON;
+  RCC_OscInitStruct.LSIState = RCC_LSI_ON;
   RCC_OscInitStruct.PLL.PLLState = RCC_PLL_ON;
   RCC_OscInitStruct.PLL.PLLSource = RCC_PLLSOURCE_HSE;
   RCC_OscInitStruct.PLL.PLLM = 8;
@@ -527,12 +476,14 @@ void SystemClock_Config(void)
   {
     Error_Handler();
   }
+
   /** Activate the Over-Drive mode
   */
   if (HAL_PWREx_EnableOverDrive() != HAL_OK)
   {
     Error_Handler();
   }
+
   /** Initializes the CPU, AHB and APB buses clocks
   */
   RCC_ClkInitStruct.ClockType = RCC_CLOCKTYPE_HCLK|RCC_CLOCKTYPE_SYSCLK
@@ -603,7 +554,7 @@ static void MX_CAN2_Init(void)
   hcan2.Instance = CAN2;
   hcan2.Init.Prescaler = 10;
   hcan2.Init.Mode = CAN_MODE_NORMAL;
-  hcan2.Init.SyncJumpWidth = CAN_SJW_1TQ;
+  hcan2.Init.SyncJumpWidth = CAN_SJW_2TQ;
   hcan2.Init.TimeSeg1 = CAN_BS1_6TQ;
   hcan2.Init.TimeSeg2 = CAN_BS2_2TQ;
   hcan2.Init.TimeTriggeredMode = DISABLE;
@@ -623,36 +574,30 @@ static void MX_CAN2_Init(void)
 }
 
 /**
-  * @brief RTC Initialization Function
+  * @brief IWDG Initialization Function
   * @param None
   * @retval None
   */
-static void MX_RTC_Init(void)
+static void MX_IWDG_Init(void)
 {
 
-  /* USER CODE BEGIN RTC_Init 0 */
+  /* USER CODE BEGIN IWDG_Init 0 */
 
-  /* USER CODE END RTC_Init 0 */
+  /* USER CODE END IWDG_Init 0 */
 
-  /* USER CODE BEGIN RTC_Init 1 */
+  /* USER CODE BEGIN IWDG_Init 1 */
 
-  /* USER CODE END RTC_Init 1 */
-  /** Initialize RTC Only
-  */
-  hrtc.Instance = RTC;
-  hrtc.Init.HourFormat = RTC_HOURFORMAT_24;
-  hrtc.Init.AsynchPrediv = 127;
-  hrtc.Init.SynchPrediv = 255;
-  hrtc.Init.OutPut = RTC_OUTPUT_DISABLE;
-  hrtc.Init.OutPutPolarity = RTC_OUTPUT_POLARITY_HIGH;
-  hrtc.Init.OutPutType = RTC_OUTPUT_TYPE_OPENDRAIN;
-  if (HAL_RTC_Init(&hrtc) != HAL_OK)
+  /* USER CODE END IWDG_Init 1 */
+  hiwdg.Instance = IWDG;
+  hiwdg.Init.Prescaler = IWDG_PRESCALER_8;
+  hiwdg.Init.Reload = 0xFFF;
+  if (HAL_IWDG_Init(&hiwdg) != HAL_OK)
   {
     Error_Handler();
   }
-  /* USER CODE BEGIN RTC_Init 2 */
+  /* USER CODE BEGIN IWDG_Init 2 */
 
-  /* USER CODE END RTC_Init 2 */
+  /* USER CODE END IWDG_Init 2 */
 
 }
 
@@ -716,6 +661,8 @@ static void MX_DMA_Init(void)
 static void MX_GPIO_Init(void)
 {
   GPIO_InitTypeDef GPIO_InitStruct = {0};
+/* USER CODE BEGIN MX_GPIO_Init_1 */
+/* USER CODE END MX_GPIO_Init_1 */
 
   /* GPIO Ports Clock Enable */
   __HAL_RCC_GPIOC_CLK_ENABLE();
@@ -724,17 +671,17 @@ static void MX_GPIO_Init(void)
   __HAL_RCC_GPIOA_CLK_ENABLE();
 
   /*Configure GPIO pin Output Level */
-  HAL_GPIO_WritePin(GPIOC, GPIO_PIN_13, GPIO_PIN_RESET);
+  HAL_GPIO_WritePin(wake_fetgate_GPIO_Port, wake_fetgate_Pin, GPIO_PIN_RESET);
 
   /*Configure GPIO pin Output Level */
   HAL_GPIO_WritePin(GPIOB, LED_GRN_Pin|LED_RED_Pin, GPIO_PIN_RESET);
 
-  /*Configure GPIO pin : PC13 */
-  GPIO_InitStruct.Pin = GPIO_PIN_13;
+  /*Configure GPIO pin : wake_fetgate_Pin */
+  GPIO_InitStruct.Pin = wake_fetgate_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
-  HAL_GPIO_Init(GPIOC, &GPIO_InitStruct);
+  HAL_GPIO_Init(wake_fetgate_GPIO_Port, &GPIO_InitStruct);
 
   /*Configure GPIO pins : LED_GRN_Pin LED_RED_Pin */
   GPIO_InitStruct.Pin = LED_GRN_Pin|LED_RED_Pin;
@@ -743,6 +690,8 @@ static void MX_GPIO_Init(void)
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
   HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
 
+/* USER CODE BEGIN MX_GPIO_Init_2 */
+/* USER CODE END MX_GPIO_Init_2 */
 }
 
 /* USER CODE BEGIN 4 */
@@ -801,5 +750,3 @@ void assert_failed(uint8_t *file, uint32_t line)
   /* USER CODE END 6 */
 }
 #endif /* USE_FULL_ASSERT */
-
-/************************ (C) COPYRIGHT STMicroelectronics *****END OF FILE****/

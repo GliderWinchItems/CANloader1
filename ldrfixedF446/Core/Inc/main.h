@@ -7,13 +7,12 @@
   ******************************************************************************
   * @attention
   *
-  * <h2><center>&copy; Copyright (c) 2022 STMicroelectronics.
-  * All rights reserved.</center></h2>
+  * Copyright (c) 2024 STMicroelectronics.
+  * All rights reserved.
   *
-  * This software component is licensed by ST under BSD 3-Clause license,
-  * the "License"; You may not use this file except in compliance with the
-  * License. You may obtain a copy of the License at:
-  *                        opensource.org/licenses/BSD-3-Clause
+  * This software is licensed under terms that can be found in the LICENSE file
+  * in the root directory of this software component.
+  * If no LICENSE file comes with this software, it is provided AS-IS.
   *
   ******************************************************************************
   */
@@ -33,21 +32,18 @@ extern "C" {
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
 #define ADDR_SCB_VTOR 0xE000ED08
-#define ADDR_FLASH_SIZE 0x1FFF75E0
-#define ADDR_UNIQUE_ID  0x1FFF7590
-#define SYSCLOCKFREQ 16000000  
+#define ADDR_FLASH_SIZE 0x1FFF7A22
+#define ADDR_UNIQUE_ID  0x1FFF7A10
+#define SYSCLOCKFREQ 180000000  
 
-#define BEGIN_FLASH 0x08008000 // Application's flash start address
-#define APP_JMPADDR 0x08008004 // Location of application's jump address
+#define BEGIN_FLASH 0x0800C000 // Application's flash start address
+#define APP_JMPADDR 0x0800C004 // Location of application's jump address
 
 #define APPERR_APP_ENTRY_OOR (1 << 0) // App out-of-range address: entry
 #define APPERR_APP_CRC_ADDR  (1 << 1) // App out-of-range address: crc
 #define APPERR_APP_CHK_ADDR  (1 << 2) // App out-of-range address: checksum
 #define APPERR_APP_CRC_NE    (1 << 2) // Computed not equal specified: CRC-32
 #define APPERR_APP_CHK_NE    (1 << 2) // Computed not equal specified: checksum
-
-
-
 /* USER CODE END Includes */
 
 /* Exported types ------------------------------------------------------------*/
@@ -73,10 +69,13 @@ void Error_Handler(void);
 /* USER CODE END EFP */
 
 /* Private defines -----------------------------------------------------------*/
+#define wake_fetgate_Pin GPIO_PIN_13
+#define wake_fetgate_GPIO_Port GPIOC
 #define LED_GRN_Pin GPIO_PIN_12
 #define LED_GRN_GPIO_Port GPIOB
 #define LED_RED_Pin GPIO_PIN_13
 #define LED_RED_GPIO_Port GPIOB
+
 /* USER CODE BEGIN Private defines */
 
 /* USER CODE END Private defines */
@@ -86,5 +85,3 @@ void Error_Handler(void);
 #endif
 
 #endif /* __MAIN_H */
-
-/************************ (C) COPYRIGHT STMicroelectronics *****END OF FILE****/

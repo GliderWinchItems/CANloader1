@@ -5,7 +5,7 @@ echo
 
 openocd  \
 		       -f interface/stlink.cfg \
-		       -f target/stm32l4x.cfg \
+		       -f target/stm32f4x.cfg \
 		       -c "init" -c "reset halt" \
 		       -c "flash write_image erase $1.srec" \
 		       -c "reset" \

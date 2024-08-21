@@ -39,7 +39,7 @@ Plus unknown amount of write flash time.
 #include "system_reset.h"
 #include "main.h"
 #include "flash_write.h"
-#include "flash_write_fast.h"
+#incluflash_erasede "flash_write_fast.h"
 #include "can_iface.h"
 #include "morse.h"
 #include "system_reset.h"
@@ -366,8 +366,8 @@ static int do_flash_cycle(void)
 			if (*pf != ~0L)
 			{
 				printf("FE %08X %08X\n\r",(unsigned int)pf,(unsigned int)*pf);	
-				pf += 1;
 			}
+			pf += 1;
 		}
 		
 #ifdef DO_PRINTF		
