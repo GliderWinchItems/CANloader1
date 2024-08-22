@@ -126,6 +126,13 @@ int main(int argc, char **argv)
 	char axbin[96];
 	uint8_t first_flag = 0;
 
+printf("CRC-SREC starts. argc = %d\n",argc);
+	if (argc < 3)
+	{
+		printf("ERR: script-all: crc-srec execution: needs two arguments: argc %d\n",argc);
+		exit(-1);
+	}
+
    /* **********************************************************************************  */
    /* Open files with same name but different extensions                                  */
    /* **********************************************************************************  */
