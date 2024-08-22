@@ -442,7 +442,7 @@ printf("bufsav1: %s\n",bufsav1);
   printf ("########################################################################\n");
   char bain[128];
   strcpy (bain,"../params/");
-  strcat (bain,*(argv+1));
+  strcat (bain,*(argv+2));
 	strcat (bain,"-crcchk.txt");
 	if ( (fpOut = fopen(bain,"a")) != NULL)
 	{

@@ -407,15 +407,10 @@ dbgct += 1;
 	printf("\n\rEND BLK p %08X end %08X padd %08X sw %d diff %d\n\r",(UI)pgblkinfo.p,(UI)pgblkinfo.end,
 		(UI)padd,(UI)pgblkinfo.sw,(UI)pgblkinfo.diff);							
 #endif			
-			/* Here next CAN msg should be a EOB or EOF. */
+			/* Here next CAN msg should be a EOB or EOF. and any 'data' CAN msgs
+			   are an error and will be not have their payloads stored. */
 			pgblkinfo.eobsw = 1;
 		}
-	}
-
-	/* Check if flash erase/write/verify is required. */
-	if ((pgblkinfo.eobsw != 0) && (pgblkinfo.sw != 0)) 
-	{ // Here, a flash cycle is to be done.
-		do_flash_write_cycle();
 	}
 	return;
 }
@@ -438,7 +433,7 @@ static void do_eob(struct CANRCVBUF* p)
 	if (p->cd.ui[1] == crc)
 	{ // Here, our CRC matches PC's CRC
 		// Write SRAM buffer to flash sector
-		int ret = flash_write(sector.secinfo.pbase, pgblkinfo.pbase, PGBUFSIZE/8);
+		int ret = do_flash_write_cycle();
 		if (ret < 0)
 		{
 #ifdef DO_PRINTF_ERR
@@ -452,14 +447,10 @@ static void do_eob(struct CANRCVBUF* p)
 		pgblkinfo.padd  = (uint8_t*)pgblkinfo.pbase;
 
 		/* Send response */
-		p->cd.uc[0] = LDR_ACK;
-		p->cd.uc[1] = 0; // Untag byte set by PC.
-		p->cd.ui[1] = (uint32_t)pgblkinfo.reqn; // Request bytes (if applicable)
-		p->dlc = 8;
-		can_msg_put(p);	// Place in CAN output buffer
+		p->cd.uc[0] = LDR_ACK; // Signal success
 	}
 	else
-	{ // Here, mismatch, so redo this mess. LDR_NACK
+	{ // Here, mismatch, so redo this SRAM block.
 		p->cd.uc[0] = LDR_NACK;
 
 #ifdef DO_PRINTF_ERR		
@@ -644,12 +635,12 @@ void do_set_addr(struct CANRCVBUF* p)
 			/* Does the sector change? */
 			if (sec != sector.prev)
 			{ // Here, yes.
-				sector.prev = sec; // (Maybe not necessary)
-				sector.cur  = sec; // New current sector
+				sector.prev = sec; // 
+				sector.cur  = sec; // (Maybe not necessary)
 				// Erase and verify erase
 				ret = do_erase_cycle(&sector.secinfo);
 				if (ret != 0)
-				{ // Screwed! Erase was attempted many times.
+				{ // Screwed! Erase/verify was attempted many times.
 #ifdef DO_PRINTF_ERR
 	printf("SET_ADDR_FL err: erase_cycle failed: %d\n\r",ret);
 #endif	
@@ -658,7 +649,7 @@ void do_set_addr(struct CANRCVBUF* p)
 			}
 			// Init sram buffer for next block
 			pgblkinfo.padd    = ptmp;		// Save working pointer
-			pgblkinfo.pbase   = (uint64_t*)pgblkinfo.padd;	// Save start
+			pgblkinfo.pbase   = &pg[0];
 	    pgblkinfo.sw_padd = 1;		// Show it was "recently set"			
 			p->cd.uc[0]    = LDR_ACK; // Signal PC set addr success
 			ldr_phase     |= 1; // Prevent app jump timeout in main 
@@ -666,6 +657,7 @@ void do_set_addr(struct CANRCVBUF* p)
 			binchksum      = 0; // Checksum init
     	buildword      = 0; // Checksum & CRC build with 32b words
     	buildword_ct   = 0; // Byte->word counter
+    	pgblkinfo.eobsw= 0; // Fill block switch  
     	pgblkinfo.eofsw= 0; // Flag shows if any block needed erase/write
 bldct = 0;    		
     		// Save in case 1st block needs resending
