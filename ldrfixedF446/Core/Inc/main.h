@@ -42,8 +42,9 @@ extern "C" {
 #define APPERR_APP_ENTRY_OOR (1 << 0) // App out-of-range address: entry
 #define APPERR_APP_CRC_ADDR  (1 << 1) // App out-of-range address: crc
 #define APPERR_APP_CHK_ADDR  (1 << 2) // App out-of-range address: checksum
-#define APPERR_APP_CRC_NE    (1 << 2) // Computed not equal specified: CRC-32
-#define APPERR_APP_CHK_NE    (1 << 2) // Computed not equal specified: checksum
+#define APPERR_APP_CRC_NE    (1 << 3) // Computed not equal specified: CRC-32
+#define APPERR_APP_CHK_NE    (1 << 4) // Computed not equal specified: checksum
+#define APPERR_APP_BOTH_NE   (1 << 5) // Computed not equal specified: both
 /* USER CODE END Includes */
 
 /* Exported types ------------------------------------------------------------*/

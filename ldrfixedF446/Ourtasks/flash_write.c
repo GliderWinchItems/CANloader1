@@ -26,6 +26,8 @@
 
 #define ERR_FLGS 0xC3FB // Error flags
 
+#include "cmsis_compiler.h"
+
 extern uint32_t __appbegin; // .ld file supplies app loading address
 
 static uint8_t otosw;
@@ -40,11 +42,11 @@ int flash_unlock(void)
 }
 
 /******************************************************************************
- * int flash_write(uint64_t *pflash, uint64_t *pfrom, int count);
- *  @brief 	: Write "count" uint64_t double words to flash
- *  @param	: pflash = pointer to double word flash address
- *  @param	: pfrom  = pointer to double word sram address
- *  @param	: count = number of double words
+ * int flash_write(uint32_t *pflash, uint32_t *pfrom, int count);
+ *  @brief 	: Write "count" uint32_t double words to flash
+ *  @param	: pflash = pointer to single word flash address
+ *  @param	: pfrom  = pointer to single word sram address
+ *  @param	: count = number of single words
  *  @return	: 
  *           0 = success
  *          -1 = address greater than 1 MB
@@ -75,11 +77,13 @@ int flash_unlock(void)
 7. Clear the PG bit in the FLASH_CR register if there no more programming request anymore.
 
 */
+
+
 uint32_t dtwfl1;
 uint32_t dtwfl2;
 #if 1
 uint32_t flash_err;
-int flash_write(uint64_t *pflash, uint64_t *pfrom, int count)
+int flash_write(uint32_t* pflash, uint32_t* pfrom, int count)
 {
 	int i;
 	flash_err = 0;
@@ -89,36 +93,45 @@ int flash_write(uint64_t *pflash, uint64_t *pfrom, int count)
 
 //	if (flash_unlock() != 0) return -4;
 
-	while ((FLASH->SR & 0x1) != 0);	// Wait for busy to go away
+	while ((FLASH->SR & (1<<16)) != 0);	// Wait for busy to go away
 
-uint32_t* pfl = (uint32_t*)pflash;
-uint32_t* prm = (uint32_t*)pfrom;	
+	/* Flash programming size. */
+	FLASH->CR |= (0x2<<8); // x32
+
+	/* Set PG (flah program bit) */
+	FLASH->CR |= 0x1; 	
+	
+uint32_t* pfl = pflash;
+uint32_t* prm = pfrom;	
 
 dtwfl1 = DTWTIME;
 
 	for (i = 0; i < count; i++)
 	{
 __DSB();			
-		while ((FLASH->SR & 0x1) != 0);	// Wait for busy to go away
+		while ((FLASH->SR & (1<<16)) != 0);	// Wait for busy to go away
 		
-		/* Clear any existing error flags. */
-		FLASH->SR |= ERR_FLGS; 
+__disable_irq();  // disable all interrupts
 
-		/* Set PG (flash program bit) */
-		FLASH->CR |= 0x1;  
+		/* Clear any existing error flags and RDERR, OPERR, EOP. */
+		FLASH->SR = (0xF<<4) | 0x3;
 
-		/* Send two words to flash */
+		/* Program 1st word */
 		*pfl++ = *prm++; 
 
  		/* Barrier to ensure programming is performed in 2 steps, in right order
     	(independently of compiler optimization behavior) */
   		__ISB();
 
-		*pfl++ = *prm++; 
+  		/* Program second word. */
+/* Problem: double word flashing is giving a pgerr, single word flashing
+is use. */  		
+//		*pfl++ = *prm++; 
 
 		/* Wait for busy to go away */
 __DSB();		
-		while ((FLASH->SR & (1 << 16)) != 0);	
+		while ((FLASH->SR & (1<<16)) != 0);	
+__enable_irq();   // enable all interrupts
 
 		flash_err |= FLASH->SR;			
 	}	
@@ -138,6 +151,7 @@ __DSB();
  *  @param	: secnum = sector number (F446: 0 - 7)
  *  @return	: 
  *           0 = success
+ *          -3 = erase address is in the loader area
  *          -4 = unlock sequence failed for lower bank
  *          -5 = error at some point in the writes, flash_err has the bits
 *******************************************************************************/
@@ -157,9 +171,9 @@ int flash_erase(uint8_t secnum)
 	flash_err = 0;
 
 	/* Don't erase the CANloader (in F446)! */
-	if (secnum < 4)  return -3;
+	if (secnum < 3)  return secnum;
 __DSB();		
-	while ((FLASH->SR & 0x1) != 0);	// JIC: Wait for busy to go away
+	while ((FLASH->SR & (1<<16)) != 0);	// JIC: Wait for busy to go away
 
 	if (flash_unlock() != 0) return -4;
 
@@ -175,7 +189,7 @@ __DSB();
 	FLASH->CR |= (1<<16); // Start bit
 __DSB();
 	/* Wait for busy to go away. */
-	while ((FLASH->SR & 0x1) != 0);
+	while ((FLASH->SR & (1<<16)) != 0);
 
 	FLASH->CR &= ~FLASH_CR_SER; // Remove Sector erase bit
 __DSB();			
@@ -186,34 +200,32 @@ __DSB();
 }
 
 /******************************************************************************
- * int flash_sector(struct SECINFO* p, uint64_t* pflash);
+ * int flash_sector(struct SECINFO* p, uint32_t* pflash);
  *  @brief 	: Determine sector info: base addr, size, sector number
  *  @param	: p = pointer to received copy of fixed info
  *  @param  : pflash = pointer to address in flash
  *  @return	: 0 = success; -1 = out-of-bounds
  ******************************************************************************/
-/* Sector info: base, size, number */
+/* Sector info: base (addr), size (bytes), sector number */
 static const struct SECINFO secinfo[] = {
-{(uint64_t*)0x08000000, 0x04000, 0}, /*  16K */
-{(uint64_t*)0x08004000, 0x04000, 1}, /*  16K */
-{(uint64_t*)0x08008000, 0x08000, 2}, /*  16K */
-{(uint64_t*)0x0800C000, 0x0C000, 3}, /*  16K */
-{(uint64_t*)0x08010000, 0x10000, 4}, /*  64K */
-{(uint64_t*)0x08020000, 0x20000, 5}, /* 128K */
-{(uint64_t*)0x08040000, 0x40000, 6}, /* 128K */
-{(uint64_t*)0x08060000, 0x60000, 7}, /* 128K */
+{(uint32_t*)0x08000000, 0x04000, 0}, /*  16K */
+{(uint32_t*)0x08004000, 0x04000, 1}, /*  16K */
+{(uint32_t*)0x08008000, 0x04000, 2}, /*  16K */
+{(uint32_t*)0x0800C000, 0x04000, 3}, /*  16K */
+{(uint32_t*)0x08010000, 0x10000, 4}, /*  64K */
+{(uint32_t*)0x08020000, 0x20000, 5}, /* 128K */
+{(uint32_t*)0x08040000, 0x20000, 6}, /* 128K */
+{(uint32_t*)0x08060000, 0x20000, 7}, /* 128K */
 };
 
-int flash_sector(struct SECINFO* p, uint64_t* pflash)
+int flash_sector(struct SECINFO* p, uint32_t* pflash)
 {
-	int idx = 0; // secinfo[idx]
-
 	/* Get flashsize and compute start and end+1 addresses. */
 	// Flash size register returns size in K bytes.
 	uint16_t flashsize = *((uint16_t*)FLASH_SIZE_DATA_REGISTER);
-	uint64_t* pbase = (uint64_t*)0x08000000;
+	uint32_t* pbase = (uint32_t*)0x08000000;
 	// End of flash address + 1
-	uint64_t* pmax  = (uint64_t*)((uint8_t*)pbase + flashsize*0x400);
+	uint32_t* pmax  = (uint32_t*)((uint8_t*)pbase + flashsize*0x400);
 
 	/* Check if pflash is within range of flash. */
 	if ((pflash <  pbase) ||
@@ -224,7 +236,7 @@ int flash_sector(struct SECINFO* p, uint64_t* pflash)
 	{
 		if (pflash >= secinfo[i].pbase)
 		{
-			*p = secinfo[idx]; // Copy struct to working struct
+			*p = secinfo[i]; // Copy struct to working struct
 			return 0; // Success			
 		}
 	}

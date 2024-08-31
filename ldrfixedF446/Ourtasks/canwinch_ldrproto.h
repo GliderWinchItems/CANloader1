@@ -15,7 +15,7 @@
 #include "common_misc.h"
 #include "common_can.h"
 
-/* SRAM buffer size (bytes) */
+/* SRAM buffer size (bytes). sector size/PGBUFSIZE => MUST BE EVEN <= */
 #define PGBUFSIZE 2048
 
 /******************************************************************************/

@@ -29,6 +29,8 @@
 #include "canwinch_ldrproto.h"
 #include "can_iface.h"
 #include "canfilter_setup.h"
+#include "flash_write.h"
+#include "crc-chk-compute.h"
 
 #include "crc-32_hw.h"
 #include "crc-32_sw.h"
@@ -39,6 +41,7 @@
 extern uint32_t __appbegin;
 
 #define SYSCLOCKFREQ 180000000
+#define UI unsigned int // Cast for eliminating printf warnings
 /* &&&&&&&&&&&&& Each node on the CAN bus gets a unit number &&&&&&&&&&&&&&&&&&&&&&&&&& */
 #include "db/gen_db.h"
 #define   IAMUNITNUMBER   CANID_UNIT_BMS03  /* Fixed loader (serial number concept) */
@@ -74,6 +77,10 @@ uint32_t* papp_chk;
 uint32_t waitctr;
  uint8_t apperr;
 
+ struct CRCCHKEMBED crcchkembed;
+ struct CRC_CHK crc_chk;
+
+
  /* Milliseconds that prevents loop in main from jumping to app. */
 extern int32_t squelch_ms;
 extern uint8_t squelch_flag;
@@ -106,11 +113,11 @@ uint32_t debugTX1c_prev;
 CAN_HandleTypeDef hcan1;
 CAN_HandleTypeDef hcan2;
 
+CRC_HandleTypeDef hcrc;
+
 IWDG_HandleTypeDef hiwdg;
 
 UART_HandleTypeDef huart3;
-DMA_HandleTypeDef hdma_usart3_rx;
-DMA_HandleTypeDef hdma_usart3_tx;
 
 /* USER CODE BEGIN PV */
 
@@ -119,11 +126,11 @@ DMA_HandleTypeDef hdma_usart3_tx;
 /* Private function prototypes -----------------------------------------------*/
 void SystemClock_Config(void);
 static void MX_GPIO_Init(void);
-static void MX_DMA_Init(void);
 static void MX_USART3_UART_Init(void);
 static void MX_CAN1_Init(void);
 static void MX_CAN2_Init(void);
 static void MX_IWDG_Init(void);
+static void MX_CRC_Init(void);
 /* USER CODE BEGIN PFP */
 char* buffer = "\n\rX ldrfixedF446 started 123";
 /* USER CODE END PFP */
@@ -152,8 +159,9 @@ int main(void)
 
   /* USER CODE BEGIN 1 */
    volatile uint32_t dtw; // DTW time
-/* --------------------- Type of RESET detection and dispatch ------------------------------------- */
+/* --------------------- Type of RESET detection and dispatch ------------------------------------- */   
   extern void* __appjump; // Defined in ldr.ld file
+#if 0  
   /* Check type of RESET and set us on the correct journey. */
   uint32_t rcc_csr = RCC->CSR;  // Get reset flags
   /* NOTE: RMVF is bit 23 for L431. */
@@ -174,7 +182,7 @@ int main(void)
     (*(  (void (*)(void))__appjump)  )(); // Indirect via label in .ld file
   }
   /* Here, not the IWDG flag, so printf some stuff and wait for possible download, before app jump. */
-
+#endif
   /* USER CODE END 1 */
 
   /* MCU Configuration--------------------------------------------------------*/
@@ -195,18 +203,18 @@ int main(void)
 
   /* Initialize all configured peripherals */
   MX_GPIO_Init();
-  MX_DMA_Init();
   MX_USART3_UART_Init();
   MX_CAN1_Init();
   MX_CAN2_Init();
-  MX_IWDG_Init();
+  //MX_IWDG_Init();
+  MX_CRC_Init();
   /* USER CODE BEGIN 2 */
   DTW_counter_init();
 
   /* CAN ID for this node is passed in to make from command line. */
   unsigned int i_am_canid = I_AM_CANID;
 
-   printf("\n\n\n\r######### ldrfixedL431 STARTS 1, 0x%0X\n",i_am_canid);
+   printf("\n\n\n\r######### ldrfixedL446 STARTS, 0x%0X\n",i_am_canid);
 
    // CubeMX may have these initially RESET which is ON.
    HAL_GPIO_WritePin(GPIOB, LED_RED_Pin|LED_GRN_Pin, GPIO_PIN_SET);   
@@ -249,111 +257,39 @@ int main(void)
   unique_id[0] = *(uint32_t*)(ADDR_UNIQUE_ID+0);
   unique_id[1] = *(uint32_t*)(ADDR_UNIQUE_ID+1);
   unique_id[2] = *(uint32_t*)(ADDR_UNIQUE_ID+2);
-  flashsize = *(uint16_t*)ADDR_FLASH_SIZE;
+  flashsize = *(uint16_t*)FLASH_SIZE_REG;
   end_flash = flashsize*1024 + 0x08000000;
-  printf("\n\rUnique ID : %08X %08X %08X",(unsigned int)unique_id[0],(unsigned int)unique_id[1],(unsigned int)unique_id[2]);
-  printf("\n\rFlash size:     %uK\n\r",(unsigned int)flashsize);
-  printf("\n\rEnd addr  :    0x%08X end_flash\n\r",(unsigned int)end_flash);
+  printf("\n\rUnique ID : %08X %08X %08X",(UI)unique_id[0],(UI)unique_id[1],(UI)unique_id[2]);
+  printf("\n\rFlash size:     %uK\n\r",(UI)flashsize);
+  printf("\n\rEnd addr  :    0x%08X end_flash\n\r",(UI)end_flash);
 
-  /* ----------------------- Header for columns of CAN error printf ------------------------------------- */
-//canwinch_pod_common_systick2048_printerr_header();
-/* ---------------- When CAN interrupts are enabled reception of msgs begins! ------------------------ */
-//  can_msg_reset_init(pctl1, IAMUNITNUMBER); // Specify CAN ID for this unit for msg caused RESET
-
-// RX msgs begin immediately following enabling CAN interrupts.  Get 'peek' 'toss' of RX msgs going soon.
-//  can_driver_enable_interrupts(); // Enable CAN interrupts
 /* -------------- Get the program loader stuff setup -------------------------------------- */
 //  canwinch_ldrproto_init(IAMUNITNUMBER);
   canwinch_ldrproto_init(i_am_canid);
-    
-//  uint32_t* pcrcblk = (uint32_t*)((uint32_t)((uint8_t*)*&__appjump + 7 + 0)); // First table entry = number of crcblocks  
-//  printf(  "(uint32_t)*pcrcblk: %08X\n\r", (unsigned int)*pcrcblk++ );
-
-//  uint32_t flashincrement = SYSCLOCKFREQ/6;
 
   // for debug multipy the increment to give the hapless Op time to think
   can_waitdelay_ct = (DTWTIME + 1*SYSCLOCKFREQ); // Time duration between heartbeat CAN msgs while waiting
 
- // printf("\n\r\nAddresses: &__appjump %08X   __appjump %08X\n\r",(unsigned int)&__appjump,(unsigned int)__appjump);
+ // printf("\n\r\nAddresses: &__appjump %08X   __appjump %08X\n\r",(UI)&__appjump,(UI)__appjump);
 
   /* ----------------- CRC|checksum check of application. ---------------------------------- */
-  // Get addresses
-  unsigned int app_entry_tmp = (unsigned int)__appjump & ~1L;
-printf("app_entry_tmp: %08X\n\r",app_entry_tmp);
-//  uint32_t* papp_entry = (uint32_t*)((uint32_t)(*(uint32_t**)__appjump) & ~1L);
-  uint32_t* papp_entry = (uint32_t*)app_entry_tmp;
-  if ((papp_entry >= (uint32_t*)(&__appbegin + (flashsize*1024))) || (papp_entry < (uint32_t*)&__appbegin))
-  { // Here bogus address (which could crash processor)
-    apperr |= APPERR_APP_ENTRY_OOR;
-printf("papp_entry err: %08X %08X %08X\n\r",(unsigned int)papp_entry,(unsigned int)(&__appbegin + (flashsize*1024)),
-      (unsigned int)&__appbegin);
-  }
-  else
-  {
-    printf("App addr entry: %08X\n\r",(unsigned int)papp_entry);
-    
-    papp_crc = *(uint32_t**)(papp_entry-1);
-    if ((papp_crc >= (uint32_t*)(&__appbegin + (flashsize*1024))) || (papp_crc < (uint32_t*)&__appbegin))
-    {
-     apperr |= APPERR_APP_CRC_ADDR;
-    }
-    else
-    {
-     printf("App addr   crc: %08X App crc  %08X\n\r",(unsigned int)papp_crc,*(unsigned int*)papp_crc);
-    }
-    
-    papp_chk =  (uint32_t*)(*(uint32_t**)(papp_entry-1)+1);
-    if ((papp_chk >= (uint32_t*)(&__appbegin + (flashsize*1024))) || (papp_chk < (uint32_t*)&__appbegin))
-    {
-     apperr |= APPERR_APP_CHK_ADDR;
-    }
-    else
-    {
-      printf("App addr   chk: %08X App chk  %08X\n\r",(unsigned int)papp_chk,*(unsigned int*)papp_chk);
-    }
-  }
+
+  int16_t apperr = crc_chk_compute_getembed(&crcchkembed);
   if (apperr == 0)
-  { // Here, no addresses were out-of-range. Check CRC and checksum
-    uint32_t* p = (uint32_t*)&__appbegin; // Point to beginning of app flash
-    binchksum   = 0; // Checksum init
-    chkctr      = 0;
-    /* Bit 12 CRCEN: CRC clock enable */
-    RCC->AHB1ENR |= RCC_AHB1ENR_CRCEN;
-    /* Reset sets polynomial to 0x04C11DB7 and INIT to 0xFFFFFFFF */
-    CRC->CR = 0x01; // 32b poly, + reset CRC computation
-    while (p < (uint32_t*)papp_crc)
-    {
-      *(__IO uint32_t*)CRC_BASE = *p; 
-      binchksum += *p;
-      p += 1;
-      chkctr += 4;
+  {
+    crc_chk_compute_app(&crc_chk, crcchkembed.pend);
+    /* Do embedded crc and chk match computed crc and chk? */
+    if ((crcchkembed.crc_chk.crc != crc_chk.crc) ||
+        (crcchkembed.crc_chk.chk != crc_chk.chk) )
+    { // Here, no.
+      apperr = -9; // Compare: mismatch
     }
-    ck = CRC->DR;
-    // Wrap 64b sum into 32b word
-    uint32_t tmp  = (binchksum >> 32);
-    binchksum = (binchksum & 0xffffffff) + tmp;
-    tmp  = (binchksum >> 32);
-    binchksum = (binchksum & 0xffffffff) + tmp;
-//    printf("CHK CTR: 0x%08X %d\n\r",(unsigned int)chkctr,(unsigned int)chkctr);
   }
-// printf("checksum: 0x%08X CRC-32: 0x%08X\n\r",(unsigned int)binchksum,ck);
 
-//  uint32_t hwcrc = rc_crc32_hw((uint32_t*)&__appbegin, chkctr/4);
-//  printf("hw  crc: 0x%08X\n\r",~(unsigned int)hwcrc);
-
-  /* Do the CRCs and Checksums match? */
-  if (*(uint32_t*)papp_crc != ck)
-  {
-    apperr |= APPERR_APP_CRC_NE;
-    printf("CRC ERR: 0x%08x 0x%08x\n\r",(unsigned int)ck,*(unsigned int*)papp_crc);
-  }
-  if (*(uint32_t*)(papp_crc+1) != binchksum)
-  {
-    apperr |= APPERR_APP_CHK_NE;
-    printf("CHK ERR: 0x%08x 0x%08x\n\r",(unsigned int)binchksum,*(unsigned int*)(papp_crc+1));
-  }
   HAL_CAN_Start(&hcan1); // CAN1
   waitctr = 0;
+
+  CRC->CR = 0x01; // 32b poly, + reset CRC computation
 
   /* USER CODE END 2 */
 
@@ -364,8 +300,7 @@ printf("papp_entry err: %08X %08X %08X\n\r",(unsigned int)papp_entry,(unsigned i
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
-  //    HAL_Delay(1000);
-
+ 
     /* Time how long squelch will be in effect. */
     if ((squelch_flag != 0) && ((int32_t)(DTWTIME - dtwmsnext) > 0))
     { // Here, CAN msg set squelch and time duration
@@ -382,7 +317,7 @@ printf("papp_entry err: %08X %08X %08X\n\r",(unsigned int)papp_entry,(unsigned i
       DTW_next_printf = DTW_next_printf + DTW_INC_printf;
       if (ldr_phase == 0)
       {
-        printf("\n\r%5u ldrfixedL431 waiting",mctr++);
+        printf("\n\r%5u ldrfixedF446 waiting",mctr++);
       }
     }
 
@@ -397,7 +332,7 @@ printf("papp_entry err: %08X %08X %08X\n\r",(unsigned int)papp_entry,(unsigned i
     }
 IWDG->KR  = 0xAAAA; // Reload the watchdog
     /* Do loader'ing, if there are applicable msgs. */
-    canwinch_ldrproto_poll(i_am_canid); // Filter CAN id
+    canwinch_ldrproto_poll(i_am_canid); // 
 
     /* Have we written to flash?  If so, don't jump to the the app unless commanded. */
     if (ldr_phase == 0)
@@ -406,10 +341,9 @@ IWDG->KR  = 0xAAAA; // Reload the watchdog
       { // We timed out.
         can_waitdelay_ct = (DTWTIME + 1*SYSCLOCKFREQ);
         waitctr += 1;
-        if (waitctr < 5)
+        if (waitctr < 25)
         { // Here, send a heartbeat CAN msg with status
-printf("wait %d:",(unsigned int)waitctr);
-          if (squelch_flag == 0)
+ //         if (squelch_flag == 0)
           {
             sendcanCMD_PAY1(CMD_CMD_HEARTBEAT,apperr);
           }
@@ -418,18 +352,24 @@ printf("wait %d:",(unsigned int)waitctr);
         { // Here, timed out. Either jump to app, or reset
           if ((apperr != 0) && (squelch_flag == 0))
           { // Here app does not pass checks: jump address, crc and/or checksum mismatch
-  //          printf("\n\r\n#### At offset %08X address %08X is bogus ####\n\r\n",(unsigned int)&__appjump, (unsigned int)__appjump);
-   //         dtw = (DTWTIME + (SYSCLOCKFREQ/2)); // Wait 1/2 sec for printf to complete
-     //       while (  ((int)dtw - (int)(DTWTIME)) > 0 );
-            system_reset(); // Software reset
-            // system_reset never returns
+           system_reset(); // Software reset
+          // system_reset never returns
           }
-printf("\n\rWatchdow set\n\r");
-          // Here, no apperr.
           dtw = (DTWTIME + (SYSCLOCKFREQ/2)); // Wait 1/2 sec for printf to complete
           while (  ((int)dtw - (int)(DTWTIME)) > 0 );
+
+          // Here, no apperr.
+         /* Shift vector table to new position. */
+          *(uint32_t*)ADDR_SCB_VTOR = 0xC000;
+
+          __DSB(); // Data barrier sync, JIC
+
+          /* Jump to app. */
+          (*(  (void (*)(void))__appjump)  )(); // Indirect via label in .ld file
+
+#if 0
           /* Set Indpendent Watch Dog and let it cause a reset. */
-          
+printf("\n\rIWDG set\n\r");          
           RCC->CSR |= (1<<0);   // LSI enable, necessary for IWDG
           while ((RCC->CSR & (1<<1)) == 0);  // wait till LSI is ready
             IWDG->KR  = 0x5555; // enable write to PR, RLR
@@ -438,6 +378,7 @@ printf("\n\rWatchdow set\n\r");
             IWDG->KR  = 0xAAAA; // Reload the watchdog
             IWDG->KR  = 0xCCCC; // Start the watchdog
           while (1==1);
+#endif          
         }
       }
     }         
@@ -515,10 +456,10 @@ static void MX_CAN1_Init(void)
 
   /* USER CODE END CAN1_Init 1 */
   hcan1.Instance = CAN1;
-  hcan1.Init.Prescaler = 9;
+  hcan1.Init.Prescaler = 10;
   hcan1.Init.Mode = CAN_MODE_NORMAL;
-  hcan1.Init.SyncJumpWidth = CAN_SJW_1TQ;
-  hcan1.Init.TimeSeg1 = CAN_BS1_7TQ;
+  hcan1.Init.SyncJumpWidth = CAN_SJW_2TQ;
+  hcan1.Init.TimeSeg1 = CAN_BS1_6TQ;
   hcan1.Init.TimeSeg2 = CAN_BS2_2TQ;
   hcan1.Init.TimeTriggeredMode = DISABLE;
   hcan1.Init.AutoBusOff = DISABLE;
@@ -574,6 +515,32 @@ static void MX_CAN2_Init(void)
 }
 
 /**
+  * @brief CRC Initialization Function
+  * @param None
+  * @retval None
+  */
+static void MX_CRC_Init(void)
+{
+
+  /* USER CODE BEGIN CRC_Init 0 */
+
+  /* USER CODE END CRC_Init 0 */
+
+  /* USER CODE BEGIN CRC_Init 1 */
+
+  /* USER CODE END CRC_Init 1 */
+  hcrc.Instance = CRC;
+  if (HAL_CRC_Init(&hcrc) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /* USER CODE BEGIN CRC_Init 2 */
+
+  /* USER CODE END CRC_Init 2 */
+
+}
+
+/**
   * @brief IWDG Initialization Function
   * @param None
   * @retval None
@@ -589,8 +556,8 @@ static void MX_IWDG_Init(void)
 
   /* USER CODE END IWDG_Init 1 */
   hiwdg.Instance = IWDG;
-  hiwdg.Init.Prescaler = IWDG_PRESCALER_8;
-  hiwdg.Init.Reload = 0xFFF;
+  hiwdg.Init.Prescaler = IWDG_PRESCALER_4;
+  hiwdg.Init.Reload = 512;
   if (HAL_IWDG_Init(&hiwdg) != HAL_OK)
   {
     Error_Handler();
@@ -631,25 +598,6 @@ static void MX_USART3_UART_Init(void)
   /* USER CODE BEGIN USART3_Init 2 */
 
   /* USER CODE END USART3_Init 2 */
-
-}
-
-/**
-  * Enable DMA controller clock
-  */
-static void MX_DMA_Init(void)
-{
-
-  /* DMA controller clock enable */
-  __HAL_RCC_DMA1_CLK_ENABLE();
-
-  /* DMA interrupt init */
-  /* DMA1_Stream1_IRQn interrupt configuration */
-  HAL_NVIC_SetPriority(DMA1_Stream1_IRQn, 0, 0);
-  HAL_NVIC_EnableIRQ(DMA1_Stream1_IRQn);
-  /* DMA1_Stream3_IRQn interrupt configuration */
-  HAL_NVIC_SetPriority(DMA1_Stream3_IRQn, 0, 0);
-  HAL_NVIC_EnableIRQ(DMA1_Stream3_IRQn);
 
 }
 
