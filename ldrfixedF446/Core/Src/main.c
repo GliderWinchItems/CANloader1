@@ -129,7 +129,7 @@ static void MX_GPIO_Init(void);
 static void MX_USART3_UART_Init(void);
 static void MX_CAN1_Init(void);
 static void MX_CAN2_Init(void);
-static void MX_IWDG_Init(void);
+//static void MX_IWDG_Init(void);
 static void MX_CRC_Init(void);
 /* USER CODE BEGIN PFP */
 char* buffer = "\n\rX ldrfixedF446 started 123";
@@ -161,20 +161,14 @@ int main(void)
    volatile uint32_t dtw; // DTW time
 /* --------------------- Type of RESET detection and dispatch ------------------------------------- */   
   extern void* __appjump; // Defined in ldr.ld file
-#if 0  
+#if 1
   /* Check type of RESET and set us on the correct journey. */
   uint32_t rcc_csr = RCC->CSR;  // Get reset flags
   /* NOTE: RMVF is bit 23 for L431. */
   RCC->CSR |= (1 << 24); // Bit 24 RMVF: Remove reset flag (prep for next RESET)
   if (rcc_csr & (1 << 29))  // Was it Independent watchdog reset flag?
-  { // Here, yes. This should be the result of a valid load process
-
-//SystemClock_Config();
-//MX_GPIO_Init();
-//HAL_GPIO_WritePin(GPIOB, LED_GRN_Pin, GPIO_PIN_RESET);HAL_GPIO_WritePin(GPIOB, LED_RED_Pin, GPIO_PIN_SET);while(1==1);
-
-    /* Shift vector table to new position. */
-    *(uint32_t*)ADDR_SCB_VTOR = 0xC000;
+  { // Here, yes. The app's embedded crc and checksum are OK.
+    *(uint32_t*)ADDR_SCB_VTOR = 0xC000; // Shift vector table to new position.
 
     __DSB(); // Data barrier sync, JIC
 
@@ -341,7 +335,7 @@ IWDG->KR  = 0xAAAA; // Reload the watchdog
       { // We timed out.
         can_waitdelay_ct = (DTWTIME + 1*SYSCLOCKFREQ);
         waitctr += 1;
-        if (waitctr < 25)
+        if (waitctr < 7)
         { // Here, send a heartbeat CAN msg with status
  //         if (squelch_flag == 0)
           {
@@ -355,9 +349,8 @@ IWDG->KR  = 0xAAAA; // Reload the watchdog
            system_reset(); // Software reset
           // system_reset never returns
           }
-          dtw = (DTWTIME + (SYSCLOCKFREQ/2)); // Wait 1/2 sec for printf to complete
-          while (  ((int)dtw - (int)(DTWTIME)) > 0 );
 
+#if 0
           // Here, no apperr.
          /* Shift vector table to new position. */
           *(uint32_t*)ADDR_SCB_VTOR = 0xC000;
@@ -366,10 +359,13 @@ IWDG->KR  = 0xAAAA; // Reload the watchdog
 
           /* Jump to app. */
           (*(  (void (*)(void))__appjump)  )(); // Indirect via label in .ld file
+#endif          
 
-#if 0
+#if 1
           /* Set Indpendent Watch Dog and let it cause a reset. */
-printf("\n\rIWDG set\n\r");          
+printf("\n\rIWDG set\n\r");   
+dtw = (DTWTIME + (SYSCLOCKFREQ/2)); // Wait 1/2 sec for printf to complete
+while (  ((int)dtw - (int)(DTWTIME)) > 0 );       
           RCC->CSR |= (1<<0);   // LSI enable, necessary for IWDG
           while ((RCC->CSR & (1<<1)) == 0);  // wait till LSI is ready
             IWDG->KR  = 0x5555; // enable write to PR, RLR
@@ -545,6 +541,7 @@ static void MX_CRC_Init(void)
   * @param None
   * @retval None
   */
+#if 0
 static void MX_IWDG_Init(void)
 {
 
@@ -567,7 +564,7 @@ static void MX_IWDG_Init(void)
   /* USER CODE END IWDG_Init 2 */
 
 }
-
+#endif
 /**
   * @brief USART3 Initialization Function
   * @param None

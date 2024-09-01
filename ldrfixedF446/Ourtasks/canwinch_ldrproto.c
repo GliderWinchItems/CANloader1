@@ -40,7 +40,7 @@ extern unsigned int ck;
 extern uint32_t binchksum;
 
 //#define DO_PRINTF // Uncomment to run printf statements
-//#define DO_PRINTF_ERR // Uncomment to run printf errors
+#define DO_PRINTF_ERR // Uncomment to run printf errors
 #define UI unsigned int // Cast for eliminating printf warnings
 
 static unsigned int debugPctr;
@@ -62,7 +62,6 @@ struct PGBUFINFO	// Working pointers and counts accompanying data for block
 	uint8_t*  padd;  // Working byte pointer within page block
 	uint32_t reqn;  // Number of bytes to request 
 	uint32_t eofsw; // Count number of byte differences
-	uint32_t diff;  // Count of byte differences
 	uint16_t   sw;  // Write switch: 0 = skip, 1 = write, 2 = erase and write
 	uint8_t eobsw;  // Last data byte ended a sram image block
 	uint8_t sw_padd;// 0 = address needs to be set before storing; 1 = OK to store
@@ -351,6 +350,7 @@ static int do_flash_write_cycle(void)
  * @brief	: Load payload into SRAM buffer for flash image
  * @param	: p = CAN msg pointer
  * ************************************************************************************** */
+int dbgxxsw;
 uint32_t dbgct;
 static void do_data(struct CANRCVBUF* p)
 {
@@ -359,14 +359,12 @@ static void do_data(struct CANRCVBUF* p)
 	   as it is an error. */
 	for (i = 1; ((i < p->dlc) && (pgblkinfo.eobsw == 0)); i++)
 	{	
-			*pgblkinfo.padd = p->cd.uc[i];	// Update sram block buffer
+		*pgblkinfo.padd = p->cd.uc[i];	// Update sram block buffer
 
-		build_chks(p->cd.uc[i]);
+		build_chks(p->cd.uc[i]); // Build word for crc and checksum
 
-//			if (( (uint32_t)pgblkinfo.padd & 0x3) == 0x3)
-//			CRC->DR = *(uint32_t*)((uint32_t)pgblkinfo.padd & ~0x3);
+dbgct += 1; // Debug: Running count of payload bytes
 
-dbgct += 1;
 		/* Step to next byte in sram block buffer. */
 		pgblkinfo.padd += 1;
 
@@ -378,8 +376,8 @@ dbgct += 1;
 	extern uint32_t dtwfl1;
 	extern uint32_t dtwfl2;		
 	printf("dtw %d",(UI)(dtwfl2-dtwfl1));			
-	printf("\n\rEND BLK p %08X end %08X padd %08X sw %d diff %d\n\r",(UI)pgblkinfo.p,(UI)pgblkinfo.end,
-		(UI)padd,(UI)pgblkinfo.sw,(UI)pgblkinfo.diff);							
+	printf("\n\rEND BLK p %08X end %08X padd %08X sw %d\n\r",(UI)pgblkinfo.p,(UI)pgblkinfo.end,
+		(UI)padd,(UI)pgblkinfo.sw);							
 #endif			
 			/* Here next CAN msg should be a EOB or EOF. and any 'data' CAN msgs
 			   are an error and will be not have their payloads stored. */
@@ -406,18 +404,6 @@ dbgeobct += 1;
 
 	/* Check that CRC's match */
 	crc = CRC->DR; // Get latest CRC
-
-//#define CRC_SRAM
-#ifdef CRC_SRAM
-	uint32_t* px = &pg[0];
-  CRC->CR = 0x01; // 32b poly, + reset CRC computation
-  while (px < &pg[PGBUFSIZE/4])
-  {
-    CRC->DR = *px; 
-    px += 1;
-  }
-  crc_eob = CRC->DR;
-#endif  
 
 	if (p->cd.ui[1] == crc)
 	{ // Here, our CRC matches PC's CRC
@@ -447,25 +433,36 @@ dbgeobct += 1;
 		p->cd.uc[0] = LDR_ACK; // Signal success
 
 #ifdef DO_PRINTF_ERR		
-	printf("CRC: F4 %08X PC %08X ct %d\n\r",(UI)crc,(UI)crc,(UI)dbgct);
+	printf("CRC: F4 %08X PC %08X ct %d\n\r",(UI)crc,(UI)p->cd.ui[1],(UI)dbgct);
 #endif
 	}
 	else
+/* ------- crc mismatch -------------------- */		
 	{ // Here, mismatch, so redo this SRAM block.
-		p->cd.uc[0] = LDR_NACK; // Signal to re-try
+	  /* Re-init page. */
+	  new_sram_page_init(p, sector.pblk);	
 
-#ifdef DO_PRINTF_ERR		
+#ifdef DO_PRINTF_ERR
 	printf("\n\rdo_eob Mismatch:\n\r");
-	printf("PG crc %08X\n\r",(UI)crc_eob);
-	printf("F4 CRC %08X bldct: %d dbgct %d\n\r",(UI)crc,(UI)bldct, (UI)dbgct);
-//printfcase STATE_MSG_DATA_END_OF:("N  CRC %08X\n\r",(UI)crc_nib);
-	printf("PC CRC %08X\n\r",(UI)p->cd.ui[1]);
-//printf("F4 CHK %08X\n\r",(UI)binchksum);
-  printf("dbgct: %d\n\r",(UI)dbgct);
+
+	#if 1
+		uint32_t* px = &pg[0];
+	  CRC->CR = 0x01; // 32b poly, + reset CRC computation
+	  while (px < &pg[PGBUFSIZE/4])
+	  {
+	    CRC->DR = *px; 
+	    px += 1;
+	  }
+	  crc_eob = CRC->DR;
+		CRC->CR = 0x01; // 32b poly, + reset CRC computation	  
+		printf("PG crc %08X\n\r",(UI)crc_eob);
+	#endif  		
+	printf("CRC: F4 %08X PC %08X ct %d\n\r",(UI)crc,(UI)p->cd.ui[1],(UI)dbgct);
 	printf("eob ptrs: pblk %08X  padd %08X\n\r",(UI)sector.pblk,(UI)pgblkinfo.padd);
 	printf("eob info: base %08X size %d num %d\n\r",(UI)sector.secinfo.pbase,(UI)sector.secinfo.size,(UI)sector.secinfo.num);
 #endif	
 
+		p->cd.uc[0] = LDR_NACK; // Signal to re-try
 	}
 	// Send response to EOB
 	p->cd.uc[1] = 0; // Untag byte set by PC.
@@ -481,17 +478,13 @@ return;
  * @param	: p = CAN msg pointer
  * ************************************************************************************** */
 uint32_t crc;
-uint32_t crc_prev;
-uint32_t binchksum_prev;
 
 static void do_eof(struct CANRCVBUF* p)
 {
-	crc_prev = crc;
-    binchksum_prev = binchksum;
-
 	/* Check that CRC's match */
 	crc = CRC->DR; // Get latest CRC
-//	if (p->cd.ui[1] == crc)
+
+	if (p->cd.ui[1] == crc)
 	{ // Here, our CRC matches PC's CRC
 		// Write sram buffer block to flash
 		int ret = do_flash_write_cycle(); 
@@ -515,49 +508,20 @@ printf("\n\r$$$$ EOF: match: %08X\n\r", (UI)crc);
 		can_msg_put(p);	// Place in CAN output buffer
 		ldr_phase = 0;
 	}
-//	else
+	else
 	{ // Here, mismatch, so redo this mess. LDR_NACK
-printf("\n\rdo EOF Mismatch:\n\r");
-printf("LCRC   %08X CT: %d dbgct %d\n\r",(UI)crc,(UI)bldct, (UI)dbgct);
-printf("eof: crc %08X m1 %08X m2 %08X m3 %08X\n\r",(UI)crc,(UI)crc_m1,(UI)crc_m2,(UI)crc_m3);
-//printf("NCRC   %08X\n\r",(UI)crc_nib);
-printf("PC CRC %08X\n\r",(UI)p->cd.ui[1]);
-printf("LCHECK %08X\n\r",(UI)binchksum);
-printf("dbgct: %d\n\r",(UI)dbgct);
-printf("eof ptrs: pblk %08X  padd %08X\n\r",(UI)sector.pblk,(UI)pgblkinfo.padd);
-printf("eof info: base %08X size %d num %d\n\r",(UI)sector.secinfo.pbase,(UI)sector.secinfo.size,(UI)sector.secinfo.num);
 
-/* Debugging crc: CRC on program load, assumes addresses within range. */
-uint32_t dbgctr9 = 0;;
-extern uint32_t __appbegin;
-extern uint32_t* papp_crc;
-    uint32_t* pcrc = (uint32_t*)&__appbegin; // Point to beginning of app flash
-    CRC->CR = 0x01; // 32b poly, + reset CRC computation
-    while (pcrc < (uint32_t*)(papp_crc+2))
-    {
-      CRC->DR = *pcrc; 
-      pcrc += 1;
-      dbgctr9 += 4;
-    }
-    ck = CRC->DR;
-printf("ck: %08X ctr9 %d\n\r",(UI)ck,(UI)dbgctr9);
-
-static struct CRC_CHK crc_chk;
-static struct CRCCHKEMBED crcchkembed;
-int retx = crc_chk_compute_getembed(&crcchkembed);
-printf("crc_chk_compute_getembed ret %d ",(UI)retx);
-	printf("crc %08x chk %08x pend %08x\n\r",(UI)crcchkembed.crc_chk.crc,(UI)crcchkembed.crc_chk.chk,(UI)crcchkembed.pend);
-if (retx != 0) 
-{
-	printf("crc_chk_compute_getembed ret %d\n\r",(UI)retx);
-}
-else
-{
-	crc_chk_compute_app(&crc_chk, crcchkembed.pend);
-	printf("%08x %08x\n\r",(UI)crc_chk.crc,(UI)crc_chk.chk);
-}
-
-while(1==1);
+#ifdef DO_PRINTF_ERR
+	printf("\n\rdo EOF Mismatch:\n\r");
+	printf("LCRC   %08X CT: %d dbgct %d\n\r",(UI)crc,(UI)bldct, (UI)dbgct);
+	printf("eof: crc %08X m1 %08X m2 %08X m3 %08X\n\r",(UI)crc,(UI)crc_m1,(UI)crc_m2,(UI)crc_m3);
+	printf("PC CRC %08X\n\r",(UI)p->cd.ui[1]);
+	printf("LCHECK %08X\n\r",(UI)binchksum);
+	printf("dbgct: %d\n\r",(UI)dbgct);
+	printf("eof ptrs: pblk %08X  padd %08X\n\r",(UI)sector.pblk,(UI)pgblkinfo.padd);
+	printf("eof info: base %08X size %d num %d\n\r",(UI)sector.secinfo.pbase,(UI)sector.secinfo.size,(UI)sector.secinfo.num);
+#endif
+		system_reset(); // Software reset
 		delayed_morse_trap(119);
 	}
 
@@ -621,8 +585,9 @@ void do_set_addr(struct CANRCVBUF* p)
 
 		  /* Here, new page. */
 		  new_sram_page_init(p, (uint32_t*)ptmp);
+		  p->cd.uc[0]    = LDR_ACK; // Signal PC set addr success
 		}
-		else// Init sram buffer pointers and claptrap
+		else
 		{ // Here, address failed out-of-bounds check
 			p->cd.uc[0] = LDR_ADDR_OOB; // Failed the address check
 #ifdef DO_PRINTF_ERR						
@@ -875,9 +840,7 @@ printf("new_sram_page_init failed: %d %08X %08X\n\r",diff,(UI)ps,(UI)sector.seci
   pgblkinfo.sw_padd = 1;		// Show it was "recently set"	
 
   CRC->CR        = 0x01; // 32b poly, + reset CRC computation
-  p->cd.uc[0]    = LDR_ACK; // Signal PC set addr success
 	ldr_phase     |= 1; // Prevent app jump timeout in main 
-	pgblkinfo.diff = 0; // Byte count of download differences
 	binchksum      = 0; // Checksum init
 	buildword      = 0; // Checksum & CRC build with 32b words
 	buildword_ct   = 0; // Byte->word counter
