@@ -59,9 +59,9 @@ _Min_Heap_Size = 0x200;      /* required amount of heap  */
 _Min_Stack_Size = 0x400; /* required amount of stack */
 
 /* Address of application jump address */
-__appjump    = 0x0800C004;
-__appbegin   = 0x0800C000;
-/* Set vector table relocate in 'main' to 0xC000 */
+__appjump    = 0x08010004;
+__appbegin   = 0x08010000;
+/* Set vector table relocate in 'main' to 0x10000 */
 
 /* Specify the memory areas */
 MEMORY

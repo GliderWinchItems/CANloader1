@@ -168,7 +168,7 @@ int main(void)
   RCC->CSR |= (1 << 24); // Bit 24 RMVF: Remove reset flag (prep for next RESET)
   if (rcc_csr & (1 << 29))  // Was it Independent watchdog reset flag?
   { // Here, yes. The app's embedded crc and checksum are OK.
-    *(uint32_t*)ADDR_SCB_VTOR = 0xC000; // Shift vector table to new position.
+    *(uint32_t*)ADDR_SCB_VTOR = 0x10000; // Shift vector table to new position.
 
     __DSB(); // Data barrier sync, JIC
 
@@ -353,7 +353,7 @@ IWDG->KR  = 0xAAAA; // Reload the watchdog
 #if 0
           // Here, no apperr.
          /* Shift vector table to new position. */
-          *(uint32_t*)ADDR_SCB_VTOR = 0xC000;
+          *(uint32_t*)ADDR_SCB_VTOR = 0x10000;
 
           __DSB(); // Data barrier sync, JIC
 
