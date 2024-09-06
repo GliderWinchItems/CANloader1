@@ -86,6 +86,12 @@ extern int32_t squelch_ms;
 extern uint8_t squelch_flag;
 extern uint32_t dtwmsnext;
 
+/* .ramcode pointers. (See .ld file) */
+uint8_t sramcode_sw;
+extern uint8_t* _siramcode;
+extern uint8_t* _sramcode;
+extern uint8_t  _eramcode;
+
 unsigned int ck; 
 uint32_t chkctr;
 
@@ -205,6 +211,13 @@ int main(void)
   /* USER CODE BEGIN 2 */
   DTW_counter_init();
 
+  /* Copy code that runs in sram. */
+  if (sramcode_sw == 0)
+  {
+    sramcode_sw = 1;
+    memmove(&_sramcode, &_siramcode, ((uint32_t)&_eramcode - (uint32_t)&_sramcode));
+  }
+
   /* CAN ID for this node is passed in to make from command line. */
   unsigned int i_am_canid = I_AM_CANID;
 
@@ -311,7 +324,7 @@ int main(void)
       DTW_next_printf = DTW_next_printf + DTW_INC_printf;
       if (ldr_phase == 0)
       {
-        printf("\n\r%5u ldrfixedF446 waiting",mctr++);
+        printf("%5u ldrfixedF446 waiting\n\r",mctr++);
       }
     }
 

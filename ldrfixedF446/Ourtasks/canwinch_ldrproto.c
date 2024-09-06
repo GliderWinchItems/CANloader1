@@ -39,6 +39,12 @@ extern struct CAN_CTLBLOCK* pctl0; // Pointer to CAN1 control block
 extern unsigned int ck;
 extern uint32_t binchksum;
 
+#define DTWSTALLINC ((180000000/1000)*1500) // DTWTIME increment for stall (1500 ms)
+uint8_t state;
+#define STATE_IDLE 0 // Nothing much going on...
+#define STATE_DATA 1 // Expecting page burst of data
+#define STATE_EOBF 2 // Expecting eob or eof from PC
+
 //#define DO_PRINTF // Uncomment to run printf statements
 #define DO_PRINTF_ERR // Uncomment to run printf errors
 #define UI unsigned int // Cast for eliminating printf warnings
@@ -98,6 +104,9 @@ static struct CANRCVBUF can_msg_wr;	// Write
 
 /* Switch that shows if we have a program loading underway and should not jump to an app */
 uint8_t ldr_phase = 0;
+
+uint32_t dtw_stall; // DTWTIME for stall detection
+uint32_t bin_ct; // Byte count of bytes received and stored
 
 //static uint32_t crc_nib; // Debug compare to hw
 static uint32_t buildword;
@@ -197,6 +206,11 @@ printf("TRANSFER SIZE: %d B\n\r",(UI)pgblocksize);
 	can_msg_wr.id  = iamunitnumber; // Write
 
 printf("IAM %08X\n\r",(UI)can_msg_cmd.id);
+
+	/* Timeout waiting for download to complete. */
+	dtw_stall = DTWTIME + DTWSTALLINC;
+	state  = STATE_IDLE;
+	bin_ct = 0;
 
 	return;
 }
@@ -354,6 +368,12 @@ int dbgxxsw;
 uint32_t dbgct;
 static void do_data(struct CANRCVBUF* p)
 {
+
+if (pgblkinfo.eobsw != 0)
+{
+	printf("do_data:eobsw: dbgct %d cmd 0x%02x\n\r", (UI)dbgct, (UI)p->cd.uc[0]);
+}
+
 	int i;
 	/* If eobsw sets and payload bytes remain, ignore the not stored payload bytes, 
 	   as it is an error. */
@@ -368,20 +388,27 @@ dbgct += 1; // Debug: Running count of payload bytes
 		/* Step to next byte in sram block buffer. */
 		pgblkinfo.padd += 1;
 
+		/* Keep track of bytes in case of a stall. */
+		bin_ct += 1;
+
 		/* Was this last store, the last byte of the sram block? */
 		if (pgblkinfo.padd >= pgblkinfo.pend)
 		{ // Here, end of sram page.
+			state = STATE_EOBF;
 			
-#ifdef DO_PRINTF	
+#ifdef DO_PRINTF_ERR
 	extern uint32_t dtwfl1;
 	extern uint32_t dtwfl2;		
-	printf("dtw %d",(UI)(dtwfl2-dtwfl1));			
-	printf("\n\rEND BLK p %08X end %08X padd %08X sw %d\n\r",(UI)pgblkinfo.p,(UI)pgblkinfo.end,
-		(UI)padd,(UI)pgblkinfo.sw);							
+	printf("do_data:eob:tw %d",(UI)(dtwfl2-dtwfl1));			
+	printf("padd %08X sw %d\n\r",(UI)pgblkinfo.padd,(UI)pgblkinfo.sw);							
 #endif			
 			/* Here next CAN msg should be a EOB or EOF. and any 'data' CAN msgs
 			   are an error and will be not have their payloads stored. */
 			pgblkinfo.eobsw = 1;
+		}
+		else
+		{
+			state = STATE_DATA;
 		}
 	}
 	return;
@@ -407,6 +434,21 @@ dbgeobct += 1;
 
 	if (p->cd.ui[1] == crc)
 	{ // Here, our CRC matches PC's CRC
+
+		if (sector.sw_erase == 0)
+		{
+			sector.sw_erase = 1;		
+		 /* Erase and verify erase. */
+			int ret = do_erase_cycle(&sector.secinfo);
+			if (ret != 0)
+			{ // Screwed! Erase/verify was attempted many times.
+		#ifdef DO_PRINTF_ERR
+		printf("SET_ADDR_FL err: erase_cycle failed: %d\n\r",ret);
+		#endif	
+				delayed_morse_trap(102); // Trap and reset
+			}
+		}
+
 		// Write SRAM buffer to flash sector
 		int ret = do_flash_write_cycle();
 		if (ret < 0)
@@ -469,7 +511,7 @@ dbgeobct += 1;
 	p->cd.ui[1] = (uint32_t)pgblkinfo.reqn; // Request bytes (if applicable)
 	p->dlc = 8;
 	can_msg_put(p);	// Place in CAN output buffer
-
+	state = STATE_DATA; // Expect data
 return;
 }
 /* **************************************************************************************
@@ -478,15 +520,23 @@ return;
  * @param	: p = CAN msg pointer
  * ************************************************************************************** */
 uint32_t crc;
+uint32_t dbgsv;
 
 static void do_eof(struct CANRCVBUF* p)
 {
+	dbgsv = p->cd.ui[1]; // EOF crc from PC
+
 	/* Check that CRC's match */
 	crc = CRC->DR; // Get latest CRC
+
+
 
 	if (p->cd.ui[1] == crc)
 	{ // Here, our CRC matches PC's CRC
 		// Write sram buffer block to flash
+
+printf("write_flash_cycle_eof: %08x %08x, %d\n\r",(UI)sector.pblk, (UI)&pg[0], (UI)PGBUFSIZE/4);
+
 		int ret = do_flash_write_cycle(); 
 		if (ret < 0)
 		{
@@ -495,9 +545,6 @@ static void do_eof(struct CANRCVBUF* p)
 #endif		
 			delayed_morse_trap(118);
 		}
-
-		/* Get next flash block and send PC a byte request. LDR_ACK */
-		pgblkinfo.padd  = (uint8_t*)pgblkinfo.pbase;	
 
 		/* Send response */
 		p->cd.uc[0] = LDR_ACK;
@@ -508,19 +555,20 @@ printf("\n\r$$$$ EOF: match: %08X\n\r", (UI)crc);
 		can_msg_put(p);	// Place in CAN output buffer
 		ldr_phase = 0;
 	}
-	else
+//	else
 	{ // Here, mismatch, so redo this mess. LDR_NACK
 
 #ifdef DO_PRINTF_ERR
 	printf("\n\rdo EOF Mismatch:\n\r");
 	printf("LCRC   %08X CT: %d dbgct %d\n\r",(UI)crc,(UI)bldct, (UI)dbgct);
 	printf("eof: crc %08X m1 %08X m2 %08X m3 %08X\n\r",(UI)crc,(UI)crc_m1,(UI)crc_m2,(UI)crc_m3);
-	printf("PC CRC %08X\n\r",(UI)p->cd.ui[1]);
+	printf("PC CRC %08X\n\r",(UI)dbgsv);
 	printf("LCHECK %08X\n\r",(UI)binchksum);
 	printf("dbgct: %d\n\r",(UI)dbgct);
 	printf("eof ptrs: pblk %08X  padd %08X\n\r",(UI)sector.pblk,(UI)pgblkinfo.padd);
 	printf("eof info: base %08X size %d num %d\n\r",(UI)sector.secinfo.pbase,(UI)sector.secinfo.size,(UI)sector.secinfo.num);
 #endif
+//while(1==1);	
 		system_reset(); // Software reset
 		delayed_morse_trap(119);
 	}
@@ -608,6 +656,7 @@ void do_set_addr(struct CANRCVBUF* p)
 	p->cd.uc[1] = 0; // Untag byte set by PC.
 	p->cd.ui[1] = (uint32_t)pgblkinfo.reqn; // Request bytes (if applicable)
 	p->dlc = 8;
+	state = STATE_DATA;
 	can_msg_put(p);	// Place in CAN output buffer
 	return;
 }
@@ -722,26 +771,42 @@ void do_cmd_cmd(struct CANRCVBUF* p)
  * @param	: i_am_canid = CAN ID for this unit
  * @brief	: 'main' polls. If msg is for this unit, then do something with it.
  * ************************************************************************************** */
+uint8_t dbg_limitct;
 static uint8_t sw_oto = 0;
 static struct CANTAKEPTR* ptake;
 void canwinch_ldrproto_poll(unsigned int i_am_canid)
 {
+	if ((int32_t)(DTWTIME - dtw_stall) > 0)
+	{ 
+		switch (state)
+		{
+		case STATE_IDLE:
+			dtw_stall = DTWTIME + DTWSTALLINC;
+			break;
+
+		case STATE_DATA: // Waiting for PC to complete page
+if (dbg_limitct > 2) break;
+printf("stall DATA: dbgct %d bin_ct %d\n\r",(UI)dbgct,(UI)bin_ct);
+dbg_limitct += 1;
+			break;
+
+		case STATE_EOBF: // Waiting for PC to send eob or eof
+if (dbg_limitct > 2) break;
+printf("stall EOBF: dbgct %d bin_ct %d\n\r",(UI)dbgct,(UI)bin_ct);
+dbg_limitct += 1;
+			break;
+		}
+	}
+
+
 	struct CANRCVBUF can;
 	if (sw_oto == 0)
 	{
 		sw_oto = 1;
 		ptake = can_iface_add_take(pctl0);
 		if (ptake == NULL) delayed_morse_trap(106);
-
 	}
 
-#if 0
-if ((can.id == 0xAEC00000) || (can.id == 0xA0000000))
-{	
-  printf("\n\r# Rcv: 0x%08X %d\n\r",(UI)can.id,(UI)can.dlc);
-  for (int m = 0; m<can.dlc; m++)printf(" %02X",(UI)can.cd.uc[m]);
-}  	
-#endif
 	if (ptake->ptake != ptake->pcir->pwork)
 	{ // Here, there is a CAN msg in the buffer
 		can = ptake->ptake->can; // Save local copy of CAN msg
@@ -751,10 +816,8 @@ if ((can.id == 0xAEC00000) || (can.id == 0xA0000000))
 		if (ptake->ptake == ptake->pcir->pend)
 			ptake->ptake = ptake->pcir->pbegin;
 
-		/* Do something! */
-//		if (can.id == CANID_UNI_BMS_PC_I)
-//printf("\n\r# Rcv: 0x%08X %d",(UI)can.id,(UI)can.dlc);
-//for (int m = 0; m<can.dlc; m++)printf(" %02X",(UI)can.cd.uc[m]);
+		dtw_stall = DTWTIME + DTWSTALLINC; // Update timeout watchdog
+
 		if (can.id == i_am_canid)
 		{
 			do_cmd_cmd(&can);		// Execute command
@@ -785,16 +848,11 @@ printf("%08X %05X %d\n\r",(UI)sector.secinfo.pbase, (UI)sector.secinfo.size, (UI
 	{ // Here, yes.
 		sector.prev = sector.secinfo.num;
 		sector.pblk = sector.secinfo.pbase;
+		sector.sw_erase = 0;
 
-	  /* Erase and verify erase. */
-		ret = do_erase_cycle(&sector.secinfo);
-		if (ret != 0)
-		{ // Screwed! Erase/verify was attempted many times.
-#ifdef DO_PRINTF_ERR
-printf("SET_ADDR_FL err: erase_cycle failed: %d %08X\n\r",ret, (UI)ps);
-#endif	
-			delayed_morse_trap(102); // Trap and reset
-		}
+ 
+
+printf("NEW SECTOR: %08X %d dbgct %d\n\r",(UI)sector.secinfo.pbase, (UI)sector.secinfo.num, (UI)dbgct);		
 	}
 	return;
 }
@@ -847,12 +905,6 @@ printf("new_sram_page_init failed: %d %08X %08X\n\r",diff,(UI)ps,(UI)sector.seci
 	pgblkinfo.eobsw= 0; // Fill block switch  
 	pgblkinfo.eofsw= 0; // Flag shows if any block needed erase/write
 bldct = 0;    		
-		// Save in case 1st block needs resending
-//		binchksum_prev = 0;
-//    		crc_nib  = ~0L;
-//		CRC->CR  = 0x01; // 32b poly, + reset CRC computation
-//		crc      = CRC->DR;	// (Should be ~0L)
-//		crc_prev = crc;
 
 debugPctr = 0;
 #ifdef DO_PRINTF

@@ -156,6 +156,21 @@ SECTIONS
     _edata = .;        /* define a global symbol at data end */
   } >RAM AT> FLASH
 
+/* used by the startup to initialize data */
+  _siramcode = LOADADDR(.ramcode);
+
+  /* Code that runs in SRAM */
+  .ramcode :
+  {
+    . = ALIGN(4);
+    _sramcode = .;        /* create a global symbol at ramcode start */
+    *(.ramcode)           /* .ramcode sections */
+    *(.ramcode*)          /* .ramcode* sections */
+
+    . = ALIGN(4);
+    _eramcode = .;        /* define a global symbol at ramcode end */
+  } >RAM AT> FLASH
+
   
   /* Uninitialized data section */
   . = ALIGN(4);
