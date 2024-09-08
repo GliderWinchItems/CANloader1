@@ -776,6 +776,7 @@ static uint8_t sw_oto = 0;
 static struct CANTAKEPTR* ptake;
 void canwinch_ldrproto_poll(unsigned int i_am_canid)
 {
+	/* Stall check and  msg */
 	if ((int32_t)(DTWTIME - dtw_stall) > 0)
 	{ 
 		switch (state)

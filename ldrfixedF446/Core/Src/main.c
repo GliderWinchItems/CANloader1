@@ -337,7 +337,10 @@ int main(void)
       else 
            GPIOB->BSRR = (1<<(13+16));
     }
-IWDG->KR  = 0xAAAA; // Reload the watchdog
+
+    /* The following is needed if IWDG was enabled in 'MX' */
+    IWDG->KR  = 0xAAAA; // Reload the watchdog
+
     /* Do loader'ing, if there are applicable msgs. */
     canwinch_ldrproto_poll(i_am_canid); // 
 
