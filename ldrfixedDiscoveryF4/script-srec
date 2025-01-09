@@ -1,0 +1,3 @@
+#!/bin/bash
+$ARM_PREFIX/bin/arm-none-eabi-objcopy -O srec ldrfixedDiscoveryF4.elf ldrfixedDiscoveryF4.srec
+drfi

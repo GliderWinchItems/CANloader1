@@ -40,7 +40,7 @@
 
 extern uint32_t __appbegin;
 
-#define SYSCLOCKFREQ 180000000
+//#define SYSCLOCKFREQ 180000000
 #define UI unsigned int // Cast for eliminating printf warnings
 /* &&&&&&&&&&&&& Each node on the CAN bus gets a unit number &&&&&&&&&&&&&&&&&&&&&&&&&& */
 #include "db/gen_db.h"
