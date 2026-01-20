@@ -222,9 +222,9 @@ int main(void)
    // DiscoveryF4 0 = off; 1 = on
    //HAL_GPIO_WritePin(GPIOB, LED_RED_Pin|LED_GRN_Pin, GPIO_PIN_SET);   
 
-/* Setup TX linked list for CAN  */
+/* Setup TX linked list  and RX buffer for CAN  */
    // CAN1 (CAN_HandleTypeDef *phcan, uint8_t canidx, uint16_t numtx, uint16_t numrx);
-  pctl0 = can_iface_init(&hcan1, 0, 16, 512);       
+  pctl0 = can_iface_init(&hcan1, 0, 16, 2048);       
   if (pctl0 == NULL) morse_trap(118); // Panic LED flashing
   if (pctl0->ret < 0) morse_trap(119);  
   

@@ -39,7 +39,7 @@ Plus unknown amount of write flash time.
 #include "system_reset.h"
 #include "main.h"
 #include "flash_write.h"
-#incluflash_erasede "flash_write_fast.h"
+#include "flash_write_fast.h"
 #include "can_iface.h"
 #include "morse.h"
 #include "system_reset.h"
